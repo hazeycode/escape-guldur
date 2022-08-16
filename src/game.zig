@@ -18,7 +18,14 @@ const WorldTileEnum = enum(u8) {
     monster_spawn,
 };
 
-const WorldPosition = struct { x: u8, y: u8 };
+const WorldPosition = struct {
+    x: u8,
+    y: u8,
+
+    pub fn eql(self: @This(), other: @This()) bool {
+        return self.x == other.x and self.y == other.y;
+    }
+};
 
 const Direction = enum(u8) {
     left,
@@ -123,8 +130,7 @@ fn try_move(state: *State, pos: WorldPosition) void {
             var monster_killed = false;
             for (state.monsters) |*monster| {
                 if (monster.health > 0 and
-                    monster.position.x == pos.x and
-                    monster.position.y == pos.y)
+                    monster.position.eql(pos))
                 {
                     w4.tone(
                         880 | (440 << 16),
@@ -147,7 +153,7 @@ fn try_move(state: *State, pos: WorldPosition) void {
 }
 
 fn end_move(state: *State) void {
-    for (state.monsters) |*monster| {
+    for (state.monsters) |*monster, i| {
         if (monster.health > 0) {
             var valid_move = false;
             while (valid_move == false) {
@@ -183,12 +189,16 @@ fn end_move(state: *State) void {
                             .y = monster.position.y + 1,
                         },
                     };
-                    if (new_pos.x > 0 and
-                        new_pos.x < world_size - 1 and
-                        new_pos.y > 0 and
-                        new_pos.y < world_size - 1 and
-                        get_world_tile(state.world, new_pos) != .wall)
-                    {
+                    if (get_world_tile(state.world, new_pos) != .wall and
+                        check_occupied: {
+                        for (state.monsters) |*other, j| {
+                            if (i == j) continue;
+                            if (other.position.eql(new_pos)) {
+                                break :check_occupied true;
+                            }
+                        }
+                        break :check_occupied false;
+                    } == false) {
                         monster.position = new_pos;
                         valid_move = true;
                     }
