@@ -15,21 +15,21 @@ pub const MapTileKind = enum(u8) {
 pub const Direction = enum(u8) { north, east, south, west };
 
 pub const Location = struct {
-    x: u8,
-    y: u8,
+    x: i16,
+    y: i16,
 
     pub fn eql(self: @This(), other: @This()) bool {
         return self.x == other.x and self.y == other.y;
     }
 
-    pub fn manhattan_to(self: Location, other: Location) u8 {
+    pub fn manhattan_to(self: Location, other: Location) i16 {
         var dx = @intCast(i16, other.x) - @intCast(i16, self.x);
         var dy = @intCast(i16, other.y) - @intCast(i16, self.y);
 
         if (dx < 0) dx = -dx;
         if (dy < 0) dy = -dy;
 
-        return @intCast(u8, dx + dy);
+        return @intCast(i16, dx + dy);
     }
 
     pub inline fn north(self: Location) Location {
@@ -84,21 +84,21 @@ test "world.Location.manhattan_to" {
     {
         const a = Location{ .x = 5, .y = 16 };
         const b = Location{ .x = 11, .y = 10 };
-        try testing.expectEqual(@as(u8, 12), a.manhattan_to(b));
+        try testing.expectEqual(@as(i16, 12), a.manhattan_to(b));
     }
     {
         const a = Location{ .x = 25, .y = 11 };
         const b = Location{ .x = 13, .y = 5 };
-        try testing.expectEqual(@as(u8, 18), a.manhattan_to(b));
+        try testing.expectEqual(@as(i16, 18), a.manhattan_to(b));
     }
     {
         const a = Location{ .x = 9, .y = 9 };
         const b = Location{ .x = 3, .y = 18 };
-        try testing.expectEqual(@as(u8, 15), a.manhattan_to(b));
+        try testing.expectEqual(@as(i16, 15), a.manhattan_to(b));
     }
     {
         const a = Location{ .x = 0, .y = 10 };
         const b = Location{ .x = 12, .y = 17 };
-        try testing.expectEqual(@as(u8, 19), a.manhattan_to(b));
+        try testing.expectEqual(@as(i16, 19), a.manhattan_to(b));
     }
 }

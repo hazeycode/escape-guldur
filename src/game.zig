@@ -42,10 +42,11 @@ pub const State = struct {
 
 const ScreenPosition = struct { x: i32, y: i32 };
 
-fn world_to_screen(world_pos: world.Location) ScreenPosition {
+fn world_to_screen(state: *State, location: world.Location) ScreenPosition {
+    const cam_offset = state.player.location;
     return .{
-        .x = world_pos.x * world_tile_width_px,
-        .y = world_pos.y * world_tile_width_px,
+        .x = (location.x - cam_offset.x) * world_tile_width_px + w4.SCREEN_SIZE / 2,
+        .y = (location.y - cam_offset.y) * world_tile_width_px + w4.SCREEN_SIZE / 2,
     };
 }
 
@@ -434,7 +435,7 @@ pub fn update(pressed: u8, state: *State) bool {
             while (location.y < world_size) : (location.y += 1) {
                 if (world.map_get_tile_kind(state.world, location) != .wall) {
                     if (world.map_get_tile(state.world_light_map, location) > 0) {
-                        const screen_pos = world_to_screen(location);
+                        const screen_pos = world_to_screen(state, location);
                         w4.blit(
                             &sprites.floor,
                             screen_pos.x,
@@ -456,7 +457,7 @@ pub fn update(pressed: u8, state: *State) bool {
             if (monster.health > 0 and
                 world.map_get_tile(state.world_light_map, monster.location) > 0)
             {
-                const screen_pos = world_to_screen(monster.location);
+                const screen_pos = world_to_screen(state, monster.location);
                 w4.blit(
                     &sprites.monster,
                     screen_pos.x,
@@ -471,7 +472,7 @@ pub fn update(pressed: u8, state: *State) bool {
             if (spit_monster.health > 0 and
                 world.map_get_tile(state.world_light_map, spit_monster.location) > 0)
             {
-                const screen_pos = world_to_screen(spit_monster.location);
+                const screen_pos = world_to_screen(state, spit_monster.location);
                 w4.blit(
                     &sprites.spit_monster,
                     screen_pos.x,
@@ -487,7 +488,7 @@ pub fn update(pressed: u8, state: *State) bool {
     { // draw player sprite
         w4.DRAW_COLORS.* = 0x02;
 
-        const screen_pos = world_to_screen(state.player.location);
+        const screen_pos = world_to_screen(state, state.player.location);
         w4.blit(
             &sprites.player,
             screen_pos.x,
@@ -503,7 +504,7 @@ pub fn update(pressed: u8, state: *State) bool {
 
         for (state.projectiles) |*projectile| {
             if (projectile.health > 0 and world.map_get_tile(state.world_light_map, projectile.location) > 0) {
-                const screen_pos = world_to_screen(projectile.location);
+                const screen_pos = world_to_screen(state, projectile.location);
                 w4.blit(
                     &sprites.projectile,
                     screen_pos.x,
