@@ -2,6 +2,8 @@ const w4 = @import("wasm4.zig");
 const wasm4_util = @import("wasm4_util.zig");
 
 pub fn update(pressed: u8) bool {
+    w4.DRAW_COLORS.* = 0x04;
+
     wasm4_util.text_centered(
         "GAME NAME",
         @divTrunc(w4.SCREEN_SIZE, 3),

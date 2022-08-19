@@ -11,6 +11,15 @@ var state = struct {
 
 var prev_gamepad: u8 = 0;
 
+export fn start() void {
+    w4.PALETTE.* = .{ // 2BIT DEMICHROME PALETTE (https://lospec.com/palette-list/2bit-demichrome)
+        0x211e20,
+        0x555568,
+        0xa0a08b,
+        0xe9efec,
+    };
+}
+
 export fn update() void {
     const gamepad = w4.GAMEPAD1.*;
     const pressed = gamepad & (gamepad ^ prev_gamepad);

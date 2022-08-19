@@ -49,14 +49,32 @@ pub const Location = struct {
     }
 };
 
-pub fn map_get_tile(world: anytype, pos: Location) MapTileKind {
+pub fn map_set_tile(world: anytype, location: Location, value: u8) void {
+    const world_type_info = @typeInfo(@TypeOf(world));
+    std.debug.assert(world_type_info == .Pointer);
+    const child_type_info = @typeInfo(world_type_info.Pointer.child);
+    std.debug.assert(child_type_info == .Array and
+        @typeInfo(child_type_info.Array.child) == .Array);
+
+    world[@intCast(usize, location.y)][@intCast(usize, location.x)] = value;
+}
+
+pub fn map_get_tile(world: anytype, location: Location) u8 {
+    const world_type_info = @typeInfo(@TypeOf(world));
+    std.debug.assert(world_type_info == .Array and
+        @typeInfo(world_type_info.Array.child) == .Array);
+
+    return world[@intCast(usize, location.y)][@intCast(usize, location.x)];
+}
+
+pub fn map_get_tile_kind(world: anytype, location: Location) MapTileKind {
     const world_type_info = @typeInfo(@TypeOf(world));
     std.debug.assert(world_type_info == .Array and
         @typeInfo(world_type_info.Array.child) == .Array);
 
     return @intToEnum(
         MapTileKind,
-        world[@intCast(usize, pos.y)][@intCast(usize, pos.x)],
+        world[@intCast(usize, location.y)][@intCast(usize, location.x)],
     );
 }
 

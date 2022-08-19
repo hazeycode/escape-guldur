@@ -29,6 +29,7 @@ const Entity = struct {
 
 pub const State = struct {
     world: WorldMap,
+    world_light_map: WorldMap,
     player: Entity,
     monsters: [8]Entity,
     spit_monsters: [8]Entity,
@@ -74,7 +75,7 @@ fn check_line_of_sight(
                 return false;
             }
 
-            if (world.map_get_tile(self.world_map, location) == .wall) {
+            if (world.map_get_tile_kind(self.world_map, location) == .wall) {
                 return false;
             } else {
                 return true;
@@ -97,7 +98,7 @@ fn check_line_of_sight(
 }
 
 fn try_move(state: *State, pos: world.Location) void {
-    switch (world.map_get_tile(state.world, pos)) {
+    switch (world.map_get_tile_kind(state.world, pos)) {
         .wall => {}, // you shall not pass!
         else => {
             var monster_killed = false;
@@ -191,7 +192,7 @@ fn end_move(state: *State) void {
                             monster.location.west(),
                         };
                         for (&possible) |new_location| {
-                            if (world.map_get_tile(state.world, new_location) != .wall and
+                            if (world.map_get_tile_kind(state.world, new_location) != .wall and
                                 check_occupied: {
                                 for (state.monsters) |*other, j| {
                                     if (i == j) continue;
@@ -242,6 +243,8 @@ fn end_move(state: *State) void {
             random_walk(state, spit_monster);
         }
     }
+
+    update_world_lightmap(state);
 }
 
 /// finds walkable adjacent tile (random walk), remains still if there are none walkable
@@ -263,7 +266,7 @@ fn random_walk(state: *State, entity: *Entity) void {
     var i: usize = 0;
     while (i < 4) : (i += 1) {
         if (walkable: {
-            if (world.map_get_tile(state.world, possible_location) == .wall) {
+            if (world.map_get_tile_kind(state.world, possible_location) == .wall) {
                 break :walkable false;
             }
             if (&state.player != entity and state.player.location.eql(possible_location)) {
@@ -305,6 +308,25 @@ fn fire_projectile(state: *State, path: Path) void {
         }
         state.projectiles[state.projectile_count] = new_projectile;
         state.projectile_count += 1;
+    }
+}
+
+fn update_world_lightmap(state: *State) void {
+    var location: world.Location = .{ .x = 0, .y = 0 };
+    while (location.x < world_size) : (location.x += 1) {
+        location.y = 0;
+        while (location.y < world_size) : (location.y += 1) {
+            if (location.manhattan_to(state.player.location) > 13) {
+                world.map_set_tile(&state.world_light_map, location, @as(u8, 0));
+            } else {
+                const res = check_line_of_sight(state.world, location, state.player.location);
+                world.map_set_tile(
+                    &state.world_light_map,
+                    location,
+                    @as(u8, if (res.hit_target) 1 else 0),
+                );
+            }
+        }
     }
 }
 
@@ -354,8 +376,9 @@ pub fn reset(state: *State) void {
 
     var location: world.Location = .{ .x = 0, .y = 0 };
     while (location.x < world_size) : (location.x += 1) {
+        location.y = 0;
         while (location.y < world_size) : (location.y += 1) {
-            switch (world.map_get_tile(state.world, location)) {
+            switch (world.map_get_tile_kind(state.world, location)) {
                 .player_spawn => {
                     state.player = .{
                         .location = location,
@@ -382,6 +405,8 @@ pub fn reset(state: *State) void {
         location.y = 0;
     }
 
+    update_world_lightmap(state);
+
     state.projectile_count = 0;
 
     state.turn = 0;
@@ -401,31 +426,36 @@ pub fn update(pressed: u8, state: *State) bool {
     }
 
     { // draw world
-        var pos: world.Location = .{ .x = 0, .y = 0 };
-        while (pos.x < world_size) : (pos.x += 1) {
-            pos.y = 0;
-            while (pos.y < world_size) : (pos.y += 1) {
-                switch (world.map_get_tile(state.world, pos)) {
-                    .wall => {
-                        const screen_pos = world_to_screen(pos);
+        w4.DRAW_COLORS.* = 0x43;
+
+        var location: world.Location = .{ .x = 0, .y = 0 };
+        while (location.x < world_size) : (location.x += 1) {
+            location.y = 0;
+            while (location.y < world_size) : (location.y += 1) {
+                if (world.map_get_tile_kind(state.world, location) != .wall) {
+                    if (world.map_get_tile(state.world_light_map, location) > 0) {
+                        const screen_pos = world_to_screen(location);
                         w4.blit(
-                            &sprites.wall,
+                            &sprites.floor,
                             screen_pos.x,
                             screen_pos.y,
                             8,
                             8,
                             w4.BLIT_1BPP,
                         );
-                    },
-                    else => {},
+                    }
                 }
             }
         }
     }
 
     { // draw monsters
+        w4.DRAW_COLORS.* = 0x02;
+
         for (state.monsters) |*monster| {
-            if (monster.health > 0) {
+            if (monster.health > 0 and
+                world.map_get_tile(state.world_light_map, monster.location) > 0)
+            {
                 const screen_pos = world_to_screen(monster.location);
                 w4.blit(
                     &sprites.monster,
@@ -438,7 +468,9 @@ pub fn update(pressed: u8, state: *State) bool {
             }
         }
         for (state.spit_monsters) |*spit_monster| {
-            if (spit_monster.health > 0) {
+            if (spit_monster.health > 0 and
+                world.map_get_tile(state.world_light_map, spit_monster.location) > 0)
+            {
                 const screen_pos = world_to_screen(spit_monster.location);
                 w4.blit(
                     &sprites.spit_monster,
@@ -453,6 +485,8 @@ pub fn update(pressed: u8, state: *State) bool {
     }
 
     { // draw player sprite
+        w4.DRAW_COLORS.* = 0x02;
+
         const screen_pos = world_to_screen(state.player.location);
         w4.blit(
             &sprites.player,
@@ -465,8 +499,10 @@ pub fn update(pressed: u8, state: *State) bool {
     }
 
     { // draw projectiles
+        w4.DRAW_COLORS.* = 0x04;
+
         for (state.projectiles) |*projectile| {
-            if (projectile.health > 0) {
+            if (projectile.health > 0 and world.map_get_tile(state.world_light_map, projectile.location) > 0) {
                 const screen_pos = world_to_screen(projectile.location);
                 w4.blit(
                     &sprites.projectile,
