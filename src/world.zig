@@ -9,6 +9,7 @@ pub const MapTileKind = enum(u8) {
     wall,
     player_spawn,
     monster_spawn,
+    spit_monster_spawn,
 };
 
 pub const Direction = enum(u8) { north, east, south, west };
