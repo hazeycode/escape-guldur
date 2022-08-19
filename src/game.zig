@@ -25,6 +25,7 @@ const Entity = struct {
     location: world.Location,
     path: Path = .{},
     health: i8,
+    cooldown: u8 = 0,
 };
 
 pub const State = struct {
@@ -143,29 +144,7 @@ fn end_move(state: *State) void {
 
     for (state.projectiles) |*projectile| {
         if (projectile.health > 0) {
-            if (projectile.path.len > 0) {
-                var i: usize = 0;
-                while (i < projectile.path.len - 1) : (i += 1) {
-                    projectile.path.locations[i] = projectile.path.locations[i + 1];
-                }
-                projectile.path.len -= 1;
-
-                projectile.location = projectile.path.locations[0];
-
-                if (projectile.location.eql(state.player.location)) {
-                    w4.trace("projectile hit player!");
-                    w4.tone(300, 2 | (4 << 8), 100, w4.TONE_NOISE);
-                    state.player.health -= 1;
-                }
-
-                if (world.map_get_tile_kind(state.world, projectile.location) != .wall) {
-                    continue;
-                }
-            }
-
-            projectile.health = 0;
-            projectile.path.len = 0;
-            state.projectile_count -= 1;
+            move_projectile(state, projectile);
         }
     }
 
@@ -179,7 +158,7 @@ fn end_move(state: *State) void {
             if (d == 1) {
                 w4.trace("monster: hit player!");
                 w4.tone(300, 2 | (4 << 8), 100, w4.TONE_NOISE);
-                state.player.health -= 1;
+                state.player.health -= 2;
                 break :find_move;
             } else if (d < 10) {
                 const res = check_line_of_sight(state.world, monster.location, state.player.location);
@@ -229,7 +208,9 @@ fn end_move(state: *State) void {
     }
 
     for (state.spit_monsters) |*spit_monster| {
-        if (spit_monster.health > 0) find_move: {
+        if (spit_monster.cooldown > 0) {
+            spit_monster.cooldown -= 1;
+        } else if (spit_monster.health > 0) find_move: {
             w4.trace("spit_monster: begin move...");
             defer w4.trace("spit_monster: move complete");
 
@@ -250,6 +231,32 @@ fn end_move(state: *State) void {
     }
 
     update_world_lightmap(state);
+}
+
+fn move_projectile(state: *State, projectile: *Entity) void {
+    if (projectile.path.len > 0) {
+        var i: usize = 0;
+        while (i < projectile.path.len - 1) : (i += 1) {
+            projectile.path.locations[i] = projectile.path.locations[i + 1];
+        }
+        projectile.path.len -= 1;
+
+        projectile.location = projectile.path.locations[0];
+
+        if (projectile.location.eql(state.player.location)) {
+            w4.trace("projectile hit player!");
+            w4.tone(300, 2 | (4 << 8), 100, w4.TONE_NOISE);
+            state.player.health -= 1;
+        }
+
+        if (world.map_get_tile_kind(state.world, projectile.location) != .wall) {
+            return;
+        }
+    }
+
+    projectile.health = 0;
+    projectile.path.len = 0;
+    state.projectile_count -= 1;
 }
 
 /// finds walkable adjacent tile (random walk), remains still if there are none walkable
@@ -312,6 +319,7 @@ fn fire_projectile(state: *State, path: Path) void {
             new_projectile.path.locations[i] = path.locations[i + 1];
         }
         state.projectiles[state.projectile_count] = new_projectile;
+        move_projectile(state, &state.projectiles[state.projectile_count]);
         state.projectile_count += 1;
     }
 }
@@ -387,7 +395,7 @@ pub fn reset(state: *State) void {
                 .player_spawn => {
                     state.player = .{
                         .location = location,
-                        .health = 3,
+                        .health = 5,
                     };
                 },
                 .monster_spawn => {
