@@ -144,6 +144,12 @@ fn end_move(state: *State) void {
     for (state.projectiles) |*projectile| {
         if (projectile.health > 0) {
             if (projectile.path.len > 0) {
+                var i: usize = 0;
+                while (i < projectile.path.len - 1) : (i += 1) {
+                    projectile.path.locations[i] = projectile.path.locations[i + 1];
+                }
+                projectile.path.len -= 1;
+
                 projectile.location = projectile.path.locations[0];
 
                 if (projectile.location.eql(state.player.location)) {
@@ -152,16 +158,14 @@ fn end_move(state: *State) void {
                     state.player.health -= 1;
                 }
 
-                projectile.path.len -= 1;
-                var i: usize = 0;
-                while (i < projectile.path.len) : (i += 1) {
-                    projectile.path.locations[i] = projectile.path.locations[i + 1];
+                if (world.map_get_tile_kind(state.world, projectile.location) != .wall) {
+                    continue;
                 }
-            } else {
-                projectile.health = 0;
-                projectile.path.len = 0;
-                state.projectile_count -= 1;
             }
+
+            projectile.health = 0;
+            projectile.path.len = 0;
+            state.projectile_count -= 1;
         }
     }
 
