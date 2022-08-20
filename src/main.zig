@@ -4,8 +4,10 @@ const wasm4_util = @import("wasm4_util.zig");
 const menu = @import("menu.zig");
 const game = @import("game.zig");
 
+const Screen = enum { menu, game, dead, win };
+
 var state = struct {
-    mode: enum { menu, game, dead } = .menu,
+    screen: Screen = .menu,
     game_state: game.State = undefined,
 }{};
 
@@ -25,23 +27,34 @@ export fn update() void {
     const pressed = gamepad & (gamepad ^ prev_gamepad);
     prev_gamepad = gamepad;
 
-    switch (state.mode) {
-        .menu => if (menu.update(pressed)) {
-            state.mode = .game;
-            state.game_state.level = 0;
-            game.load_world(&state.game_state);
-        },
-        .game => {
-            if (game.update(pressed, &state.game_state)) {
-                state.mode = .dead;
-            }
-        },
-        .dead => {
-            wasm4_util.text_centered("YOU DIED", w4.SCREEN_SIZE / 2);
-            if (pressed & w4.BUTTON_1 != 0) {
-                w4.tone(440 | (880 << 16), 2 | (4 << 8), 80, w4.TONE_PULSE1);
-                state.mode = .menu;
-            }
-        },
+    switch (state.screen) {
+        .menu => menu.update(&state, pressed),
+        .game => game.update(&state, pressed),
+        .dead => simple_screen("YOU DIED", pressed, .menu, null),
+        .win => simple_screen("YOU WIN", pressed, .menu, null),
+    }
+}
+
+fn simple_screen(
+    text_str: []const u8,
+    pressed: u8,
+    advance_screen: Screen,
+    maybe_retreat_screen: ?Screen,
+) void {
+    w4.DRAW_COLORS.* = 0x04;
+
+    wasm4_util.text_centered(text_str, w4.SCREEN_SIZE / 2);
+
+    if (pressed & w4.BUTTON_1 != 0) {
+        w4.tone(440 | (880 << 16), 2 | (4 << 8), 80, w4.TONE_PULSE1);
+        state.screen = advance_screen;
+        return;
+    }
+
+    if (maybe_retreat_screen) |retreat_screen| {
+        if (pressed & w4.BUTTON_2 != 0) {
+            w4.tone(440 | (220 << 16), 2 | (4 << 8), 80, w4.TONE_PULSE1);
+            state.screen = retreat_screen;
+        }
     }
 }

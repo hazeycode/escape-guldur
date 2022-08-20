@@ -41,6 +41,54 @@ pub const State = struct {
     projectile_count: u8,
     turn: u8 = 0,
     level: u8 = 0,
+
+    pub fn load_level(self: *@This(), level: u8) void {
+        self.level = level;
+        self.world = levels[level];
+
+        for (self.monsters) |*monster| monster.health = 0;
+        self.monster_count = 0;
+
+        for (self.spit_monsters) |*spit_monster| spit_monster.health = 0;
+        self.spit_monster_count = 0;
+
+        for (self.projectiles) |*projectile| projectile.health = 0;
+        self.projectile_count = 0;
+
+        var location: world.Location = .{ .x = 0, .y = 0 };
+        while (location.x < world_size_x) : (location.x += 1) {
+            defer location.y = 0;
+            while (location.y < world_size_y) : (location.y += 1) {
+                switch (world.map_get_tile_kind(self.world, location)) {
+                    .player_spawn => {
+                        self.player = .{
+                            .location = location,
+                            .health = 5,
+                        };
+                    },
+                    .monster_spawn => {
+                        self.monsters[self.monster_count] = .{
+                            .location = location,
+                            .health = 1,
+                        };
+                        self.monster_count += 1;
+                    },
+                    .spit_monster_spawn => {
+                        self.spit_monsters[self.spit_monster_count] = .{
+                            .location = location,
+                            .health = 2,
+                        };
+                        self.spit_monster_count += 1;
+                    },
+                    else => {},
+                }
+            }
+        }
+
+        update_world_lightmap(self);
+
+        self.turn = 0;
+    }
 };
 
 const ScreenPosition = struct { x: i32, y: i32 };
@@ -148,9 +196,11 @@ fn end_move(state: *State) void {
     defer w4.trace("");
 
     if (world.map_get_tile_kind(state.world, state.player.location) == .door) {
-        w4.trace("next level...");
         state.level += 1;
-        load_world(state);
+        if (state.level < levels.len) {
+            w4.trace("load next level");
+            state.load_level(state.level);
+        }
         return;
     }
 
@@ -355,57 +405,16 @@ fn update_world_lightmap(state: *State) void {
     }
 }
 
-pub fn load_world(state: *State) void {
-    w4.trace("load_world");
-
-    state.world = levels[state.level];
-
-    for (state.monsters) |*monster| monster.health = 0;
-    state.monster_count = 0;
-
-    for (state.spit_monsters) |*spit_monster| spit_monster.health = 0;
-    state.spit_monster_count = 0;
-
-    for (state.projectiles) |*projectile| projectile.health = 0;
-    state.projectile_count = 0;
-
-    var location: world.Location = .{ .x = 0, .y = 0 };
-    while (location.x < world_size_x) : (location.x += 1) {
-        defer location.y = 0;
-        while (location.y < world_size_y) : (location.y += 1) {
-            switch (world.map_get_tile_kind(state.world, location)) {
-                .player_spawn => {
-                    state.player = .{
-                        .location = location,
-                        .health = 5,
-                    };
-                },
-                .monster_spawn => {
-                    state.monsters[state.monster_count] = .{
-                        .location = location,
-                        .health = 1,
-                    };
-                    state.monster_count += 1;
-                },
-                .spit_monster_spawn => {
-                    state.spit_monsters[state.spit_monster_count] = .{
-                        .location = location,
-                        .health = 2,
-                    };
-                    state.spit_monster_count += 1;
-                },
-                else => {},
-            }
-        }
+pub fn update(global_state: anytype, pressed: u8) void {
+    if (@typeInfo(@TypeOf(global_state)) != .Pointer) {
+        @compileError("global_state type must be a pointer");
     }
 
-    update_world_lightmap(state);
+    var state = &global_state.game_state;
 
-    state.turn = 0;
-}
-
-pub fn update(pressed: u8, state: *State) bool {
-    if (state.player.health <= 0) return true;
+    if (state.player.health <= 0) {
+        global_state.screen = .dead;
+    }
 
     if (pressed & w4.BUTTON_UP != 0) {
         try_move(state, state.player.location.north());
@@ -415,6 +424,10 @@ pub fn update(pressed: u8, state: *State) bool {
         try_move(state, state.player.location.south());
     } else if (pressed & w4.BUTTON_LEFT != 0) {
         try_move(state, state.player.location.west());
+    }
+
+    if (state.level == levels.len) {
+        global_state.screen = .win;
     }
 
     { // draw world
@@ -521,11 +534,9 @@ pub fn update(pressed: u8, state: *State) bool {
             }
         }
     }
-
-    return false;
 }
 
-const levels: [3]WorldMap = .{
+const levels: [2]WorldMap = .{
     @bitCast(WorldMap, [_]u4{
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,
@@ -550,37 +561,14 @@ const levels: [3]WorldMap = .{
     }),
 
     @bitCast(WorldMap, [_]u4{
-        1, 1, 1,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1,
+        1, 1, 1,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1, 1, 3,  1, 1,  1, 1, 1,
         1, 0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1, 0, 0,  0, 0,  0, 0, 1,
         1, 0, 11, 0, 0, 0, 0, 0,  0, 11, 0, 0, 1, 0, 0,  0, 0,  0, 0, 1,
         1, 0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1, 0, 0,  0, 0,  0, 0, 1,
         1, 0, 0,  0, 1, 1, 1, 1,  1, 0,  0, 0, 1, 1, 1,  0, 0,  0, 0, 1,
         1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 1,  0, 0,  0, 0, 1,
         1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 1,  0, 0,  0, 0, 1,
-        1, 0, 0,  0, 1, 0, 0, 0,  0, 13, 0, 0, 0, 0, 1,  0, 11, 0, 0, 1,
-        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 1,  0, 0,  0, 0, 1,
-        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 1, 1, 1,  0, 0,  0, 0, 1,
-        1, 0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
-        1, 0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
-        1, 0, 0,  0, 1, 0, 0, 11, 0, 0,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1,
-        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
-        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
-        1, 0, 0,  0, 1, 1, 1, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
-        1, 0, 0,  0, 0, 0, 1, 0,  0, 0,  0, 0, 0, 0, 11, 0, 0,  0, 0, 1,
-        1, 0, 10, 0, 0, 0, 1, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
-        1, 0, 0,  0, 0, 0, 1, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
-        1, 1, 1,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1,
-    }),
-
-    @bitCast(WorldMap, [_]u4{
-        1, 1, 1,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1,
-        1, 0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1, 0, 0,  0, 0,  0, 0, 1,
-        1, 0, 11, 0, 0, 0, 0, 0,  0, 11, 0, 0, 1, 0, 0,  0, 0,  0, 0, 1,
-        1, 0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1, 0, 0,  0, 0,  0, 0, 1,
-        1, 0, 0,  0, 1, 1, 1, 1,  1, 0,  0, 0, 1, 1, 1,  0, 0,  0, 0, 1,
-        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 1,  0, 0,  0, 0, 1,
-        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 1,  0, 0,  0, 0, 1,
-        1, 0, 0,  0, 1, 0, 0, 0,  0, 13, 0, 0, 0, 0, 1,  0, 11, 0, 0, 1,
+        1, 0, 0,  0, 1, 0, 0, 0,  0, 12, 0, 0, 0, 0, 1,  0, 11, 0, 0, 1,
         1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 1,  0, 0,  0, 0, 1,
         1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 1, 1, 1,  0, 0,  0, 0, 1,
         1, 0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
