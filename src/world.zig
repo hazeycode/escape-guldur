@@ -1,4 +1,11 @@
 const std = @import("std");
+const w4 = @import("wasm4.zig");
+
+const bresenham_line = @import("bresenham.zig").line;
+
+pub const size_x = 20;
+pub const size_y = 20;
+const max_distance = 32;
 
 pub fn Map(comptime columns: u8, comptime rows: u8) type {
     return [columns][rows]u4;
@@ -54,6 +61,60 @@ pub const Location = struct {
         return Location{ .x = self.x - 1, .y = self.y };
     }
 };
+
+pub const Path = struct {
+    locations: [max_distance]Location = undefined,
+    len: usize = 0,
+};
+
+pub const LineOfSightResult = struct {
+    path: Path = .{},
+    hit_target: bool = false,
+};
+
+pub fn check_line_of_sight(
+    comptime MapType: type,
+    world_map: MapType,
+    origin: Location,
+    target: Location,
+) LineOfSightResult {
+    var plotter = struct {
+        world_map: MapType,
+        target: Location,
+        result: LineOfSightResult = .{},
+
+        pub fn plot(self: *@This(), x: i32, y: i32) bool {
+            const location = Location{ .x = @intCast(u8, x), .y = @intCast(u8, y) };
+
+            self.result.path.locations[self.result.path.len] = location;
+            self.result.path.len += 1;
+
+            if (location.eql(self.target)) {
+                self.result.hit_target = true;
+                return false;
+            }
+
+            if (map_get_tile_kind(self.world_map, location) == .wall) {
+                return false;
+            } else {
+                return true;
+            }
+        }
+    }{
+        .world_map = world_map,
+        .target = target,
+    };
+
+    bresenham_line(
+        @intCast(i32, origin.x),
+        @intCast(i32, origin.y),
+        @intCast(i32, target.x),
+        @intCast(i32, target.y),
+        &plotter,
+    );
+
+    return plotter.result;
+}
 
 pub fn map_set_tile(world: anytype, location: Location, value: u4) void {
     const world_type_info = @typeInfo(@TypeOf(world));

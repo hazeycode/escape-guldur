@@ -8,21 +8,9 @@ var rng = std.rand.DefaultPrng.init(42);
 const sprites = @import("sprites.zig");
 const world = @import("world.zig");
 
-const bresenham_line = @import("bresenham.zig").line;
-
-const world_tile_width_px = 8;
-const world_size_x = w4.SCREEN_SIZE / world_tile_width_px;
-const world_size_y = w4.SCREEN_SIZE / world_tile_width_px;
-const max_world_distance = 32;
-
 const max_player_health = 5;
 
-const WorldMap = world.Map(world_size_x, world_size_y);
-
-const Path = struct {
-    locations: [max_world_distance]world.Location = undefined,
-    len: usize = 0,
-};
+const WorldMap = world.Map(world.size_x, world.size_y);
 
 const Entity = struct {
     location: world.Location,
@@ -51,7 +39,7 @@ const Player = struct {
 
 const Enemy = struct {
     entity: Entity,
-    path: Path = .{},
+    path: world.Path = .{},
     cooldown: u8 = 0,
 };
 
@@ -99,9 +87,9 @@ pub const State = struct {
         self.pickup_count = 0;
 
         var location: world.Location = .{ .x = 0, .y = 0 };
-        while (location.x < world_size_x) : (location.x += 1) {
+        while (location.x < world.size_x) : (location.x += 1) {
             defer location.y = 0;
-            while (location.y < world_size_y) : (location.y += 1) {
+            while (location.y < world.size_y) : (location.y += 1) {
                 switch (world.map_get_tile_kind(self.world, location)) {
                     .player_spawn => {
                         self.player.entity.location = location;
@@ -154,57 +142,9 @@ const ScreenPosition = struct { x: i32, y: i32 };
 fn world_to_screen(state: *State, location: world.Location) ScreenPosition {
     const cam_offset = state.player.entity.location;
     return .{
-        .x = (location.x - cam_offset.x) * world_tile_width_px + w4.SCREEN_SIZE / 2,
-        .y = (location.y - cam_offset.y) * world_tile_width_px + w4.SCREEN_SIZE / 2,
+        .x = (location.x - cam_offset.x) * 8 + w4.SCREEN_SIZE / 2,
+        .y = (location.y - cam_offset.y) * 8 + w4.SCREEN_SIZE / 2,
     };
-}
-
-const LineOfSightResult = struct {
-    path: Path = .{},
-    hit_target: bool = false,
-};
-
-fn check_line_of_sight(
-    world_map: WorldMap,
-    origin: world.Location,
-    target: world.Location,
-) LineOfSightResult {
-    var plotter = struct {
-        world_map: WorldMap,
-        target: world.Location,
-        result: LineOfSightResult = .{},
-
-        pub fn plot(self: *@This(), x: i32, y: i32) bool {
-            const location = world.Location{ .x = @intCast(u8, x), .y = @intCast(u8, y) };
-
-            self.result.path.locations[self.result.path.len] = location;
-            self.result.path.len += 1;
-
-            if (location.eql(self.target)) {
-                self.result.hit_target = true;
-                return false;
-            }
-
-            if (world.map_get_tile_kind(self.world_map, location) == .wall) {
-                return false;
-            } else {
-                return true;
-            }
-        }
-    }{
-        .world_map = world_map,
-        .target = target,
-    };
-
-    bresenham_line(
-        @intCast(i32, origin.x),
-        @intCast(i32, origin.y),
-        @intCast(i32, target.x),
-        @intCast(i32, target.y),
-        &plotter,
-    );
-
-    return plotter.result;
 }
 
 fn try_move(state: *State, pos: world.Location) void {
@@ -312,7 +252,12 @@ fn end_move(state: *State) void {
                 state.player.entity.health -= 2;
                 break :find_move;
             } else if (d < 10) {
-                const res = check_line_of_sight(state.world, monster.entity.location, state.player.entity.location);
+                const res = world.check_line_of_sight(
+                    WorldMap,
+                    state.world,
+                    monster.entity.location,
+                    state.player.entity.location,
+                );
                 if (res.hit_target) {
                     std.debug.assert(res.path.len > 1);
 
@@ -359,7 +304,8 @@ fn end_move(state: *State) void {
             const d = fire_monster.entity.location.manhattan_to(state.player.entity.location);
 
             if (d > 3 and d < 20) {
-                const res = check_line_of_sight(
+                const res = world.check_line_of_sight(
+                    WorldMap,
                     state.world,
                     fire_monster.entity.location,
                     state.player.entity.location,
@@ -381,7 +327,8 @@ fn end_move(state: *State) void {
 
 /// Returns true if the location is not occupied by a blocking tile or blocking entity
 fn test_walkable(state: *State, location: world.Location) bool {
-    if (world.map_get_tile_kind(state.world, location) == .wall) {
+    const kind = world.map_get_tile_kind(state.world, location);
+    if (kind == .wall or kind == .locked_door) {
         return false;
     }
     if (state.player.entity.location.eql(location)) {
@@ -400,7 +347,7 @@ fn test_walkable(state: *State, location: world.Location) bool {
     return true;
 }
 
-fn spawn_fire(state: *State, path: Path) void {
+fn spawn_fire(state: *State, path: world.Path) void {
     w4.trace("spawn fire");
 
     if (state.fire_count < state.fire.len) {
@@ -479,13 +426,18 @@ fn update_world_lightmap(state: *State) void {
     w4.trace("update world lightmap");
 
     var location: world.Location = .{ .x = 0, .y = 0 };
-    while (location.x < world_size_x) : (location.x += 1) {
+    while (location.x < world.size_x) : (location.x += 1) {
         defer location.y = 0;
-        while (location.y < world_size_y) : (location.y += 1) {
+        while (location.y < world.size_y) : (location.y += 1) {
             if (location.manhattan_to(state.player.entity.location) > 13) {
                 world.map_set_tile(&state.world_light_map, location, @as(u8, 0));
             } else {
-                const res = check_line_of_sight(state.world, location, state.player.entity.location);
+                const res = world.check_line_of_sight(
+                    WorldMap,
+                    state.world,
+                    location,
+                    state.player.entity.location,
+                );
                 world.map_set_tile(
                     &state.world_light_map,
                     location,
@@ -527,12 +479,12 @@ pub fn update(global_state: anytype, pressed: u8) void {
 
     { // draw world
         var location: world.Location = .{ .x = 0, .y = 0 };
-        while (location.x < world_size_x) : (location.x += 1) {
+        while (location.x < world.size_x) : (location.x += 1) {
             defer location.y = 0;
-            while (location.y < world_size_y) : (location.y += 1) {
+            while (location.y < world.size_y) : (location.y += 1) {
                 if (world.map_get_tile(state.world_light_map, location) > 0) {
                     switch (world.map_get_tile_kind(state.world, location)) {
-                        .wall => {},
+                        .wall, .locked_door => {},
                         .door => {
                             w4.DRAW_COLORS.* = 0x03;
                             const screen_pos = world_to_screen(state, location);
