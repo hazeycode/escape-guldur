@@ -1,18 +1,21 @@
 const std = @import("std");
 
-pub fn Map(comptime columns: u16, comptime rows: u16) type {
+pub fn Map(comptime columns: u8, comptime rows: u8) type {
     return [columns][rows]u4;
 }
 
-pub const MapTileKind = enum(u8) {
-    floor,
-    wall,
-    player_spawn,
-    monster_spawn,
-    spit_monster_spawn,
+pub const MapTileKind = enum(u4) {
+    floor = 0,
+    wall = 1,
+    breakable_wall = 2,
+    door = 3,
+    locked_door = 4,
+    player_spawn = 10,
+    monster_spawn = 11,
+    spit_monster_spawn = 12,
 };
 
-pub const Direction = enum(u8) { north, east, south, west };
+pub const Direction = enum(u2) { north, east, south, west };
 
 pub const Location = struct {
     x: i16,

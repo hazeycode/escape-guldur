@@ -11,10 +11,11 @@ const world = @import("world.zig");
 const bresenham_line = @import("bresenham.zig").line;
 
 const world_tile_width_px = 8;
-const world_size = w4.SCREEN_SIZE / world_tile_width_px;
-const max_world_distance = sqrt(world_size * world_size + world_size * world_size);
+const world_size_x = w4.SCREEN_SIZE / world_tile_width_px;
+const world_size_y = w4.SCREEN_SIZE / world_tile_width_px;
+const max_world_distance = sqrt(world_size_x * world_size_x + world_size_y * world_size_y);
 
-const WorldMap = world.Map(world_size, world_size);
+const WorldMap = world.Map(world_size_x, world_size_y);
 
 const Path = struct {
     locations: [max_world_distance]world.Location = undefined,
@@ -38,7 +39,8 @@ pub const State = struct {
     monster_count: u8,
     spit_monster_count: u8,
     projectile_count: u8,
-    turn: u8,
+    turn: u8 = 0,
+    level: u8 = 0,
 };
 
 const ScreenPosition = struct { x: i32, y: i32 };
@@ -101,7 +103,10 @@ fn check_line_of_sight(
 
 fn try_move(state: *State, pos: world.Location) void {
     switch (world.map_get_tile_kind(state.world, pos)) {
-        .wall => {}, // you shall not pass!
+        .wall => {
+            // you shall not pass!
+            return;
+        },
         else => {
             var monster_killed = false;
             for (state.monsters) |*monster| {
@@ -132,15 +137,22 @@ fn try_move(state: *State, pos: world.Location) void {
                 state.player.location = pos;
                 w4.tone(220, 2 | (4 << 8), 80, w4.TONE_TRIANGLE);
             }
-
-            end_move(state);
         },
     }
+
+    end_move(state);
 }
 
 fn end_move(state: *State) void {
     w4.trace("end_move...");
     defer w4.trace("");
+
+    if (world.map_get_tile_kind(state.world, state.player.location) == .door) {
+        w4.trace("next level...");
+        state.level += 1;
+        load_world(state);
+        return;
+    }
 
     for (state.projectiles) |*projectile| {
         if (projectile.health > 0) {
@@ -266,7 +278,7 @@ fn random_walk(state: *State, entity: *Entity) void {
     const south = entity.location.south();
     const west = entity.location.west();
 
-    var random_dir = @intToEnum(world.Direction, @mod(rng.random().int(u8), 4));
+    var random_dir = @intToEnum(world.Direction, @mod(rng.random().int(u8), 3));
 
     var possible_location = switch (random_dir) {
         .north => north,
@@ -301,7 +313,7 @@ fn random_walk(state: *State, entity: *Entity) void {
             entity.location = possible_location;
         }
 
-        random_dir = @intToEnum(world.Direction, @mod(@enumToInt(random_dir) + 1, 4));
+        random_dir = @intToEnum(world.Direction, @mod(@enumToInt(random_dir) + 1, 3));
     }
 }
 
@@ -326,9 +338,9 @@ fn fire_projectile(state: *State, path: Path) void {
 
 fn update_world_lightmap(state: *State) void {
     var location: world.Location = .{ .x = 0, .y = 0 };
-    while (location.x < world_size) : (location.x += 1) {
-        location.y = 0;
-        while (location.y < world_size) : (location.y += 1) {
+    while (location.x < world_size_x) : (location.x += 1) {
+        defer location.y = 0;
+        while (location.y < world_size_y) : (location.y += 1) {
             if (location.manhattan_to(state.player.location) > 13) {
                 world.map_set_tile(&state.world_light_map, location, @as(u8, 0));
             } else {
@@ -343,54 +355,24 @@ fn update_world_lightmap(state: *State) void {
     }
 }
 
-pub fn reset(state: *State) void {
-    w4.trace("reset");
+pub fn load_world(state: *State) void {
+    w4.trace("load_world");
 
-    state.world = @bitCast(WorldMap, [_]u4{
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1,
-        1, 0, 3, 0, 0, 0, 0, 0, 0, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1,
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1,
-        1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1,
-        1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-        1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-        1, 0, 0, 0, 1, 0, 0, 0, 0, 4, 0, 0, 0, 0, 1, 0, 3, 0, 0, 1,
-        1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-        1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1,
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-        1, 0, 0, 0, 1, 0, 0, 3, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-        1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-        1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-        1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-        1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 1,
-        1, 0, 2, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-        1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    });
+    state.world = levels[state.level];
 
-    for (state.monsters) |*monster| monster.* = .{
-        .location = .{
-            .x = 0,
-            .y = 0,
-        },
-        .health = 0,
-    };
+    for (state.monsters) |*monster| monster.health = 0;
     state.monster_count = 0;
 
-    for (state.spit_monsters) |*spit_monster| spit_monster.* = .{
-        .location = .{
-            .x = 0,
-            .y = 0,
-        },
-        .health = 0,
-    };
+    for (state.spit_monsters) |*spit_monster| spit_monster.health = 0;
     state.spit_monster_count = 0;
 
+    for (state.projectiles) |*projectile| projectile.health = 0;
+    state.projectile_count = 0;
+
     var location: world.Location = .{ .x = 0, .y = 0 };
-    while (location.x < world_size) : (location.x += 1) {
-        location.y = 0;
-        while (location.y < world_size) : (location.y += 1) {
+    while (location.x < world_size_x) : (location.x += 1) {
+        defer location.y = 0;
+        while (location.y < world_size_y) : (location.y += 1) {
             switch (world.map_get_tile_kind(state.world, location)) {
                 .player_spawn => {
                     state.player = .{
@@ -415,12 +397,9 @@ pub fn reset(state: *State) void {
                 else => {},
             }
         }
-        location.y = 0;
     }
 
     update_world_lightmap(state);
-
-    state.projectile_count = 0;
 
     state.turn = 0;
 }
@@ -439,23 +418,37 @@ pub fn update(pressed: u8, state: *State) bool {
     }
 
     { // draw world
-        w4.DRAW_COLORS.* = 0x43;
-
         var location: world.Location = .{ .x = 0, .y = 0 };
-        while (location.x < world_size) : (location.x += 1) {
-            location.y = 0;
-            while (location.y < world_size) : (location.y += 1) {
-                if (world.map_get_tile_kind(state.world, location) != .wall) {
-                    if (world.map_get_tile(state.world_light_map, location) > 0) {
-                        const screen_pos = world_to_screen(state, location);
-                        w4.blit(
-                            &sprites.floor,
-                            screen_pos.x,
-                            screen_pos.y,
-                            8,
-                            8,
-                            w4.BLIT_1BPP,
-                        );
+        while (location.x < world_size_x) : (location.x += 1) {
+            defer location.y = 0;
+            while (location.y < world_size_y) : (location.y += 1) {
+                if (world.map_get_tile(state.world_light_map, location) > 0) {
+                    switch (world.map_get_tile_kind(state.world, location)) {
+                        .floor, .player_spawn, .monster_spawn, .spit_monster_spawn => {
+                            w4.DRAW_COLORS.* = 0x43;
+                            const screen_pos = world_to_screen(state, location);
+                            w4.blit(
+                                &sprites.floor,
+                                screen_pos.x,
+                                screen_pos.y,
+                                8,
+                                8,
+                                w4.BLIT_1BPP,
+                            );
+                        },
+                        .door => {
+                            w4.DRAW_COLORS.* = 0x03;
+                            const screen_pos = world_to_screen(state, location);
+                            w4.blit(
+                                &sprites.door,
+                                screen_pos.x,
+                                screen_pos.y,
+                                8,
+                                8,
+                                w4.BLIT_1BPP,
+                            );
+                        },
+                        else => {},
                     }
                 }
             }
@@ -531,3 +524,74 @@ pub fn update(pressed: u8, state: *State) bool {
 
     return false;
 }
+
+const levels: [3]WorldMap = .{
+    @bitCast(WorldMap, [_]u4{
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3,  1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0,  0, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0,  0, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0,  0, 0, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0,  0, 0, 0, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0,  0, 0, 0, 0, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0,  0, 0, 0, 0, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0,  0, 0, 0, 0, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 10, 0, 0, 0, 0, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0,  0, 0, 0, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0,  0, 0, 0, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0,  0, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,
+    }),
+
+    @bitCast(WorldMap, [_]u4{
+        1, 1, 1,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1,
+        1, 0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 11, 0, 0, 0, 0, 0,  0, 11, 0, 0, 1, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 1, 1, 1, 1,  1, 0,  0, 0, 1, 1, 1,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 1,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 1,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 1, 0, 0, 0,  0, 13, 0, 0, 0, 0, 1,  0, 11, 0, 0, 1,
+        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 1,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 1, 1, 1,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 1, 0, 0, 11, 0, 0,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1,
+        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 1, 1, 1, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 0, 0, 1, 0,  0, 0,  0, 0, 0, 0, 11, 0, 0,  0, 0, 1,
+        1, 0, 10, 0, 0, 0, 1, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 0, 0, 1, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
+        1, 1, 1,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1,
+    }),
+
+    @bitCast(WorldMap, [_]u4{
+        1, 1, 1,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1,
+        1, 0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 11, 0, 0, 0, 0, 0,  0, 11, 0, 0, 1, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 1, 1, 1, 1,  1, 0,  0, 0, 1, 1, 1,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 1,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 1,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 1, 0, 0, 0,  0, 13, 0, 0, 0, 0, 1,  0, 11, 0, 0, 1,
+        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 1,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 1, 1, 1,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 1, 0, 0, 11, 0, 0,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1,
+        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 1, 1, 1, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 0, 0, 1, 0,  0, 0,  0, 0, 0, 0, 11, 0, 0,  0, 0, 1,
+        1, 0, 10, 0, 0, 0, 1, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 0, 0, 1, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
+        1, 1, 1,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1,
+    }),
+};

@@ -27,8 +27,9 @@ export fn update() void {
 
     switch (state.mode) {
         .menu => if (menu.update(pressed)) {
-            game.reset(&state.game_state);
             state.mode = .game;
+            state.game_state.level = 0;
+            game.load_world(&state.game_state);
         },
         .game => {
             if (game.update(pressed, &state.game_state)) {
