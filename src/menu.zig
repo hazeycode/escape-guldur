@@ -9,7 +9,7 @@ pub fn update(state: anytype, pressed: u8) void {
     w4.DRAW_COLORS.* = 0x04;
 
     wasm4_util.text_centered(
-        "GAME NAME",
+        "Escape Guldur",
         @divTrunc(w4.SCREEN_SIZE, 3),
     );
 
