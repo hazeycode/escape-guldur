@@ -15,6 +15,8 @@ const world_size_x = w4.SCREEN_SIZE / world_tile_width_px;
 const world_size_y = w4.SCREEN_SIZE / world_tile_width_px;
 const max_world_distance = sqrt(world_size_x * world_size_x + world_size_y * world_size_y);
 
+const max_player_health = 5;
+
 const WorldMap = world.Map(world_size_x, world_size_y);
 
 const Path = struct {
@@ -63,7 +65,7 @@ pub const State = struct {
                     .player_spawn => {
                         self.player = .{
                             .location = location,
-                            .health = 5,
+                            .health = max_player_health,
                         };
                     },
                     .monster_spawn => {
@@ -192,8 +194,11 @@ fn try_move(state: *State, pos: world.Location) void {
 }
 
 fn end_move(state: *State) void {
+    defer {
+        if (state.player.health < 0) state.player.health = 0;
+    }
+
     w4.trace("end_move...");
-    defer w4.trace("");
 
     if (world.map_get_tile_kind(state.world, state.player.location) == .door) {
         state.level += 1;
@@ -531,6 +536,33 @@ pub fn update(global_state: anytype, pressed: u8) void {
                     8,
                     w4.BLIT_1BPP,
                 );
+            }
+        }
+    }
+
+    { // draw hud
+        { // draw health bar
+            w4.DRAW_COLORS.* = 0x40;
+
+            std.debug.assert(state.player.health >= 0);
+            const health = @intCast(u16, state.player.health);
+            const piece_width: u16 = 8; //3;
+            const piece_height: u16 = 8; // 4;
+            const width: u16 = health * piece_width;
+            const y = @intCast(i32, w4.SCREEN_SIZE) - piece_height - 1;
+            var x: i32 = @intCast(i32, w4.SCREEN_SIZE) / 2 - width / 2;
+            var i: usize = 0;
+            while (i < state.player.health) : (i += 1) {
+                // w4.rect(x, y, piece_width, piece_height);
+                w4.blit(
+                    &sprites.heart,
+                    x,
+                    y,
+                    piece_width,
+                    piece_height,
+                    w4.BLIT_1BPP,
+                );
+                x += piece_width;
             }
         }
     }
