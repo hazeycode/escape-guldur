@@ -35,12 +35,12 @@ pub const State = struct {
     world: WorldMap,
     world_light_map: WorldMap,
     player: Entity,
-    monsters: [8]Entity,
+    monsters: [16]Entity,
     spit_monsters: [8]Entity,
-    projectiles: [8]Entity,
+    fire: [16]Entity,
     monster_count: u8,
     spit_monster_count: u8,
-    projectile_count: u8,
+    fire_count: u8,
     turn: u8 = 0,
     level: u8 = 0,
 
@@ -58,8 +58,8 @@ pub const State = struct {
         for (self.spit_monsters) |*spit_monster| spit_monster.health = 0;
         self.spit_monster_count = 0;
 
-        for (self.projectiles) |*projectile| projectile.health = 0;
-        self.projectile_count = 0;
+        for (self.fire) |*fire| fire.health = 0;
+        self.fire_count = 0;
 
         var location: world.Location = .{ .x = 0, .y = 0 };
         while (location.x < world_size_x) : (location.x += 1) {
@@ -210,9 +210,9 @@ fn end_move(state: *State) void {
         return;
     }
 
-    for (state.projectiles) |*projectile| {
-        if (projectile.health > 0) {
-            move_projectile(state, projectile);
+    for (state.fire) |*fire| {
+        if (fire.health > 0) {
+            move_fire(state, fire);
         }
     }
 
@@ -288,7 +288,7 @@ fn end_move(state: *State) void {
                 const res = check_line_of_sight(state.world, spit_monster.location, state.player.location);
                 if (res.hit_target) {
                     w4.trace("spit_monster: spit at player");
-                    fire_projectile(state, res.path);
+                    spawn_fire(state, res.path);
                     break :find_move;
                 }
             }
@@ -301,30 +301,49 @@ fn end_move(state: *State) void {
     update_world_lightmap(state);
 }
 
-fn move_projectile(state: *State, projectile: *Entity) void {
-    if (projectile.path.len > 0) {
+fn spawn_fire(state: *State, path: Path) void {
+    std.debug.assert(path.len > 1);
+
+    if (state.fire_count < state.fire.len) {
+        var new_fire = Entity{
+            .location = path.locations[0],
+            .health = 1,
+        };
+        new_fire.path.len = path.len - 1;
         var i: usize = 0;
-        while (i < projectile.path.len - 1) : (i += 1) {
-            projectile.path.locations[i] = projectile.path.locations[i + 1];
+        while (i < new_fire.path.len - 1) : (i += 1) {
+            new_fire.path.locations[i] = path.locations[i + 1];
         }
-        projectile.path.len -= 1;
+        state.fire[state.fire_count] = new_fire;
+        move_fire(state, &state.fire[state.fire_count]);
+        state.fire_count += 1;
+    }
+}
 
-        projectile.location = projectile.path.locations[0];
+fn move_fire(state: *State, fire: *Entity) void {
+    if (fire.path.len > 0) {
+        var i: usize = 0;
+        while (i < fire.path.len - 1) : (i += 1) {
+            fire.path.locations[i] = fire.path.locations[i + 1];
+        }
+        fire.path.len -= 1;
 
-        if (projectile.location.eql(state.player.location)) {
-            w4.trace("projectile hit player!");
+        fire.location = fire.path.locations[0];
+
+        if (fire.location.eql(state.player.location)) {
+            w4.trace("fire hit player!");
             w4.tone(300, 2 | (4 << 8), 100, w4.TONE_NOISE);
             state.player.health -= 1;
         }
 
-        if (world.map_get_tile_kind(state.world, projectile.location) != .wall) {
+        if (world.map_get_tile_kind(state.world, fire.location) != .wall) {
             return;
         }
     }
 
-    projectile.health = 0;
-    projectile.path.len = 0;
-    state.projectile_count -= 1;
+    fire.health = 0;
+    fire.path.len = 0;
+    state.fire_count -= 1;
 }
 
 /// finds walkable adjacent tile (random walk), remains still if there are none walkable
@@ -370,25 +389,6 @@ fn random_walk(state: *State, entity: *Entity) void {
         }
 
         random_dir = @intToEnum(world.Direction, @mod(@enumToInt(random_dir) + 1, 3));
-    }
-}
-
-fn fire_projectile(state: *State, path: Path) void {
-    std.debug.assert(path.len > 1);
-
-    if (state.projectile_count < state.projectiles.len) {
-        var new_projectile = Entity{
-            .location = path.locations[0],
-            .health = 1,
-        };
-        new_projectile.path.len = path.len - 1;
-        var i: usize = 0;
-        while (i < new_projectile.path.len) : (i += 1) {
-            new_projectile.path.locations[i] = path.locations[i + 1];
-        }
-        state.projectiles[state.projectile_count] = new_projectile;
-        move_projectile(state, &state.projectiles[state.projectile_count]);
-        state.projectile_count += 1;
     }
 }
 
@@ -523,14 +523,14 @@ pub fn update(global_state: anytype, pressed: u8) void {
         );
     }
 
-    { // draw projectiles
-        w4.DRAW_COLORS.* = 0x04;
+    { // draw fire
+        w4.DRAW_COLORS.* = 0x40;
 
-        for (state.projectiles) |*projectile| {
-            if (projectile.health > 0 and world.map_get_tile(state.world_light_map, projectile.location) > 0) {
-                const screen_pos = world_to_screen(state, projectile.location);
+        for (state.fire) |*fire| {
+            if (fire.health > 0 and world.map_get_tile(state.world_light_map, fire.location) > 0) {
+                const screen_pos = world_to_screen(state, fire.location);
                 w4.blit(
-                    &sprites.projectile,
+                    &sprites.fire,
                     screen_pos.x,
                     screen_pos.y,
                     8,
