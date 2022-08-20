@@ -510,7 +510,7 @@ pub fn update(global_state: anytype, pressed: u8) void {
     }
 
     { // draw player sprite
-        w4.DRAW_COLORS.* = 0x02;
+        w4.DRAW_COLORS.* = 0x20;
 
         const screen_pos = world_to_screen(state, state.player.location);
         w4.blit(

@@ -31,7 +31,7 @@ export fn update() void {
         .menu => menu.update(&state, pressed),
         .game => game.update(&state, pressed),
         .dead => simple_screen("YOU DIED", pressed, .menu, null),
-        .win => simple_screen("YOU WIN", pressed, .menu, null),
+        .win => simple_screen("YOU ESCAPED", pressed, .menu, null),
     }
 }
 
