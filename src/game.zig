@@ -44,6 +44,10 @@ pub const State = struct {
     turn: u8 = 0,
     level: u8 = 0,
 
+    pub fn reset(self: *@This()) void {
+        self.player.health = max_player_health;
+    }
+
     pub fn load_level(self: *@This(), level: u8) void {
         self.level = level;
         self.world = levels[level];
@@ -63,10 +67,7 @@ pub const State = struct {
             while (location.y < world_size_y) : (location.y += 1) {
                 switch (world.map_get_tile_kind(self.world, location)) {
                     .player_spawn => {
-                        self.player = .{
-                            .location = location,
-                            .health = max_player_health,
-                        };
+                        self.player.location = location;
                     },
                     .monster_spawn => {
                         self.monsters[self.monster_count] = .{

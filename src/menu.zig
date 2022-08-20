@@ -21,6 +21,7 @@ pub fn update(state: anytype, pressed: u8) void {
     if (pressed & w4.BUTTON_1 != 0) {
         w4.tone(440 | (880 << 16), 2 | (4 << 8), 80, w4.TONE_PULSE1);
         state.screen = .game;
+        state.game_state.reset();
         state.game_state.load_level(0);
     }
 }
