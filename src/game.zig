@@ -336,7 +336,7 @@ fn update_world_lightmap(state: *State) void {
                 world.map_set_tile(
                     &state.world_light_map,
                     location,
-                    @as(u8, if (res.hit_target) 1 else 0),
+                    @as(u4, if (res.hit_target) 1 else 0),
                 );
             }
         }
@@ -346,7 +346,7 @@ fn update_world_lightmap(state: *State) void {
 pub fn reset(state: *State) void {
     w4.trace("reset");
 
-    state.world = @bitCast(WorldMap, [_]u8{
+    state.world = @bitCast(WorldMap, [_]u4{
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
         1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1,
         1, 0, 3, 0, 0, 0, 0, 0, 0, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1,

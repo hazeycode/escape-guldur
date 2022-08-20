@@ -1,7 +1,7 @@
 const std = @import("std");
 
 pub fn Map(comptime columns: u16, comptime rows: u16) type {
-    return [columns][rows]u8;
+    return [columns][rows]u4;
 }
 
 pub const MapTileKind = enum(u8) {
@@ -49,7 +49,7 @@ pub const Location = struct {
     }
 };
 
-pub fn map_set_tile(world: anytype, location: Location, value: u8) void {
+pub fn map_set_tile(world: anytype, location: Location, value: u4) void {
     const world_type_info = @typeInfo(@TypeOf(world));
     std.debug.assert(world_type_info == .Pointer);
     const child_type_info = @typeInfo(world_type_info.Pointer.child);
@@ -59,7 +59,7 @@ pub fn map_set_tile(world: anytype, location: Location, value: u8) void {
     world[@intCast(usize, location.y)][@intCast(usize, location.x)] = value;
 }
 
-pub fn map_get_tile(world: anytype, location: Location) u8 {
+pub fn map_get_tile(world: anytype, location: Location) u4 {
     const world_type_info = @typeInfo(@TypeOf(world));
     std.debug.assert(world_type_info == .Array and
         @typeInfo(world_type_info.Array.child) == .Array);
