@@ -45,10 +45,13 @@ pub const State = struct {
     level: u8 = 0,
 
     pub fn reset(self: *@This()) void {
+        w4.trace("reset");
         self.player.health = max_player_health;
     }
 
     pub fn load_level(self: *@This(), level: u8) void {
+        w4.trace("load_level");
+
         self.level = level;
         self.world = levels[level];
 
@@ -216,7 +219,7 @@ fn end_move(state: *State) void {
         }
     }
 
-    for (state.monsters) |*monster, i| {
+    for (state.monsters) |*monster| {
         if (monster.health > 0) find_move: {
             w4.trace("monster: begin move...");
             defer w4.trace("monster: move complete");
@@ -244,16 +247,7 @@ fn end_move(state: *State) void {
                             monster.location.west(),
                         };
                         for (&possible) |new_location| {
-                            if (world.map_get_tile_kind(state.world, new_location) != .wall and
-                                check_occupied: {
-                                for (state.monsters) |*other, j| {
-                                    if (i == j) continue;
-                                    if (other.location.eql(new_location)) {
-                                        break :check_occupied true;
-                                    }
-                                }
-                                break :check_occupied false;
-                            } == false) {
+                            if (test_walkable(state, new_location)) {
                                 const dist = new_location.manhattan_to(state.player.location);
                                 if (dist < min_dist) {
                                     monster.location = new_location;
@@ -299,6 +293,27 @@ fn end_move(state: *State) void {
     }
 
     update_world_lightmap(state);
+}
+
+/// Returns true if the location is not occupied by a blocking tile or blocking entity
+fn test_walkable(state: *State, location: world.Location) bool {
+    if (world.map_get_tile_kind(state.world, location) == .wall) {
+        return false;
+    }
+    if (state.player.location.eql(location)) {
+        return false;
+    }
+    for (state.monsters) |*other| {
+        if (other.location.eql(location)) {
+            return false;
+        }
+    }
+    for (state.spit_monsters) |*other| {
+        if (other.location.eql(location)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 fn spawn_fire(state: *State, path: Path) void {
@@ -364,27 +379,7 @@ fn random_walk(state: *State, entity: *Entity) void {
 
     var i: usize = 0;
     while (i < 4) : (i += 1) {
-        if (walkable: {
-            if (world.map_get_tile_kind(state.world, possible_location) == .wall) {
-                break :walkable false;
-            }
-            if (&state.player != entity and state.player.location.eql(possible_location)) {
-                break :walkable false;
-            }
-            for (state.monsters) |*other| {
-                if (other == entity) continue;
-                if (other.location.eql(possible_location)) {
-                    break :walkable false;
-                }
-            }
-            for (state.spit_monsters) |*other| {
-                if (other == entity) continue;
-                if (other.location.eql(possible_location)) {
-                    break :walkable false;
-                }
-            }
-            break :walkable true;
-        }) {
+        if (test_walkable(state, possible_location)) {
             entity.location = possible_location;
         }
 
@@ -547,14 +542,13 @@ pub fn update(global_state: anytype, pressed: u8) void {
 
             std.debug.assert(state.player.health >= 0);
             const health = @intCast(u16, state.player.health);
-            const piece_width: u16 = 8; //3;
-            const piece_height: u16 = 8; // 4;
+            const piece_width: u16 = 8;
+            const piece_height: u16 = 8;
             const width: u16 = health * piece_width;
             const y = @intCast(i32, w4.SCREEN_SIZE) - piece_height - 1;
             var x: i32 = @intCast(i32, w4.SCREEN_SIZE) / 2 - width / 2;
             var i: usize = 0;
             while (i < state.player.health) : (i += 1) {
-                // w4.rect(x, y, piece_width, piece_height);
                 w4.blit(
                     &sprites.heart,
                     x,
@@ -594,26 +588,26 @@ const levels: [4]WorldMap = .{
     }),
 
     @bitCast(WorldMap, [_]u4{
-        1, 1, 1, 1, 3,  1, 1, 1, 1, 1, 1,  1,  1, 1, 1, 1, 1, 1, 1, 1,
-        1, 1, 1, 0, 12, 0, 1, 1, 1, 1, 0,  0,  0, 1, 1, 0, 0, 0, 0, 1,
-        1, 1, 0, 0, 0,  0, 0, 0, 0, 0, 0,  0,  0, 0, 0, 0, 0, 0, 0, 1,
-        1, 4, 0, 0, 0,  0, 0, 0, 0, 0, 0,  0,  0, 0, 0, 0, 0, 0, 0, 1,
-        1, 1, 0, 0, 0,  0, 0, 0, 0, 0, 0,  0,  0, 0, 1, 0, 0, 0, 0, 1,
-        1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 0,  0,  0, 1, 1, 0, 0, 0, 0, 1,
-        1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 0,  11, 0, 1, 1, 0, 0, 0, 0, 1,
-        1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 0,  0,  0, 0, 1, 1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1,  1, 1, 1, 1, 0, 0,  0,  0, 0, 0, 1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1,  1, 1, 1, 0, 0, 0,  0,  0, 0, 0, 1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1,  1, 1, 1, 0, 0, 0,  0,  0, 0, 0, 1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1,  1, 1, 4, 0, 0, 0,  0,  0, 0, 0, 4, 1, 1, 1, 1,
-        1, 1, 1, 1, 1,  1, 1, 1, 0, 0, 11, 0,  0, 0, 0, 1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1,  1, 1, 1, 0, 0, 0,  0,  0, 0, 0, 1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1,  1, 1, 1, 1, 0, 0,  0,  0, 0, 0, 1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 0,  0,  0, 1, 1, 1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 0,  0,  0, 1, 1, 1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 0,  0,  0, 1, 1, 1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 0,  10, 0, 1, 1, 1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1,  1,  1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1,  1, 3,  1, 1, 1, 1, 1, 1,  1,  1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1,  0, 12, 0, 1, 1, 1, 1, 0,  0,  0, 1, 1, 0, 0, 0, 0, 1,
+        1, 1, 0,  0, 0,  0, 0, 0, 0, 0, 0,  0,  0, 0, 0, 0, 0, 0, 0, 1,
+        1, 4, 11, 0, 0,  0, 0, 0, 0, 0, 0,  0,  0, 0, 0, 0, 0, 0, 0, 1,
+        1, 1, 0,  0, 0,  0, 0, 0, 0, 0, 0,  0,  0, 0, 1, 0, 0, 0, 0, 1,
+        1, 1, 1,  1, 1,  1, 1, 1, 1, 1, 0,  0,  0, 1, 1, 0, 0, 0, 0, 1,
+        1, 1, 1,  1, 1,  1, 1, 1, 1, 1, 0,  11, 0, 1, 1, 0, 0, 0, 0, 1,
+        1, 1, 1,  1, 1,  1, 1, 1, 1, 1, 0,  0,  0, 0, 1, 1, 1, 1, 1, 1,
+        1, 1, 1,  1, 1,  1, 1, 1, 1, 0, 0,  0,  0, 0, 0, 1, 1, 1, 1, 1,
+        1, 1, 1,  1, 1,  1, 1, 1, 0, 0, 0,  0,  0, 0, 0, 1, 1, 1, 1, 1,
+        1, 1, 1,  1, 1,  1, 1, 1, 0, 0, 0,  0,  0, 0, 0, 1, 1, 1, 1, 1,
+        1, 1, 1,  1, 1,  1, 1, 4, 0, 0, 0,  0,  0, 0, 0, 4, 1, 1, 1, 1,
+        1, 1, 1,  1, 1,  1, 1, 1, 0, 0, 11, 0,  0, 0, 0, 1, 1, 1, 1, 1,
+        1, 1, 1,  1, 1,  1, 1, 1, 0, 0, 0,  0,  0, 0, 0, 1, 1, 1, 1, 1,
+        1, 1, 1,  1, 1,  1, 1, 1, 1, 0, 0,  0,  0, 0, 0, 1, 1, 1, 1, 1,
+        1, 1, 1,  1, 1,  1, 1, 1, 1, 1, 0,  0,  0, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1,  1, 1,  1, 1, 1, 1, 1, 0,  0,  0, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1,  1, 1,  1, 1, 1, 1, 1, 0,  0,  0, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1,  1, 1,  1, 1, 1, 1, 1, 0,  10, 0, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1,  1, 1,  1, 1, 1, 1, 1, 1,  1,  1, 1, 1, 1, 1, 1, 1, 1,
     }),
 
     @bitCast(WorldMap, [_]u4{
@@ -640,7 +634,7 @@ const levels: [4]WorldMap = .{
     }),
 
     @bitCast(WorldMap, [_]u4{
-        1, 1, 1,  1,  1, 1, 1, 1,  3, 1,  1, 1,  1,  1, 3,  1, 1,  1, 1, 1,
+        1, 1, 1,  1,  1, 1, 1, 1,  3, 1,  1, 1,  1,  1, 1,  1, 1,  1, 1, 1,
         1, 0, 0,  0,  0, 0, 0, 0,  0, 0,  0, 0,  0,  0, 0,  0, 0,  0, 0, 1,
         1, 0, 11, 0,  0, 0, 0, 0,  0, 11, 0, 0,  0,  0, 0,  0, 0,  0, 0, 1,
         1, 0, 0,  0,  0, 0, 0, 1,  0, 0,  0, 0,  0,  0, 0,  0, 0,  0, 0, 1,
