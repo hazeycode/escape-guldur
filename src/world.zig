@@ -10,9 +10,12 @@ pub const MapTileKind = enum(u4) {
     breakable_wall = 2,
     door = 3,
     locked_door = 4,
+    sword_pickup = 5,
+    small_axe_pickup = 6,
+    health_pickup = 7,
     player_spawn = 10,
     monster_spawn = 11,
-    spit_monster_spawn = 12,
+    fire_monster_spawn = 12,
 };
 
 pub const Direction = enum(u2) { north, east, south, west };
