@@ -62,9 +62,12 @@ const Pickup = struct {
 };
 
 pub const State = struct {
-    turn_state: enum { ready, response, complete } = .ready,
+    turn_state: enum { ready, aim, response, complete } = .ready,
     turn: u8 = 0,
     level: u8 = 0,
+    action_target: u8 = 0,
+    action_targets: [16]world.Location,
+    action_target_count: u8 = 0,
     world: WorldMap,
     world_light_map: WorldMap,
     player: Player,
@@ -84,12 +87,14 @@ pub const State = struct {
         self.player.entity.health = max_player_health;
         self.player.active_item = .fists;
         self.player.items = 0b1;
+        self.action_target_count = 0;
     }
 
     pub fn load_level(self: *@This(), level: u8) void {
         w4.trace("load_level");
 
         self.turn_state = .ready;
+        self.action_target_count = 0;
 
         self.level = level;
         self.world = levels[level];
@@ -160,7 +165,10 @@ pub const State = struct {
 const ScreenPosition = struct { x: i32, y: i32 };
 
 fn world_to_screen(state: *State, location: world.Location) ScreenPosition {
-    const cam_offset = state.player.entity.location;
+    var cam_offset = state.player.entity.location;
+    if (state.turn_state == .aim and state.action_target_count > 0) {
+        cam_offset = state.action_targets[state.action_target];
+    }
     return .{
         .x = (location.x - cam_offset.x) * 8 + w4.SCREEN_SIZE / 2,
         .y = (location.y - cam_offset.y) * 8 + w4.SCREEN_SIZE / 2,
@@ -219,10 +227,6 @@ fn try_move(state: *State, location: world.Location) void {
     }
 }
 
-fn try_use_item(_: *State) void {
-    w4.trace("use item");
-}
-
 fn try_cycle_item(state: *State) void {
     w4.trace("cycle item");
 
@@ -237,6 +241,28 @@ fn try_cycle_item(state: *State) void {
             break;
         }
         w4.trace("dont possess item");
+    }
+}
+
+fn find_action_targets(state: *State) void {
+    state.action_target_count = 0;
+
+    switch (state.player.active_item) {
+        .fists, .sword => { // melee
+            for ([_]world.Location{
+                state.player.entity.location.north(),
+                state.player.entity.location.east(),
+                state.player.entity.location.south(),
+                state.player.entity.location.west(),
+            }) |location| {
+                if (world.map_get_tile_kind(state.world, location) != .wall) {
+                    state.action_targets[state.action_target_count] = location;
+                    state.action_target_count += 1;
+                }
+            }
+        },
+        .small_axe => { // ranged attack
+        },
     }
 }
 
@@ -496,6 +522,11 @@ fn update_world_lightmap(state: *State) void {
     }
 }
 
+fn cancel_aim(state: *State) void {
+    w4.trace("cancel item");
+    state.turn_state = .ready;
+}
+
 pub fn update(global_state: anytype, pressed: u8) void {
     if (@typeInfo(@TypeOf(global_state)) != .Pointer) {
         @compileError("global_state type must be a pointer");
@@ -506,7 +537,10 @@ pub fn update(global_state: anytype, pressed: u8) void {
     switch (state.turn_state) {
         .ready => {
             if (pressed & w4.BUTTON_1 != 0) {
-                try_use_item(state);
+                w4.trace("aim item");
+                find_action_targets(state);
+                state.action_target = 0;
+                state.turn_state = .aim;
             } else if (pressed & w4.BUTTON_2 != 0) {
                 try_cycle_item(state);
             } else if (pressed & w4.BUTTON_UP != 0) {
@@ -517,6 +551,23 @@ pub fn update(global_state: anytype, pressed: u8) void {
                 try_move(state, state.player.entity.location.south());
             } else if (pressed & w4.BUTTON_LEFT != 0) {
                 try_move(state, state.player.entity.location.west());
+            }
+        },
+        .aim => {
+            if (pressed & w4.BUTTON_1 != 0) {
+                if (state.action_target_count == 0) {
+                    cancel_aim(state);
+                } else {
+                    w4.trace("use item");
+                }
+            } else if (pressed & w4.BUTTON_2 != 0) {
+                cancel_aim(state);
+            } else if (state.action_target_count > 0) {
+                if (pressed & w4.BUTTON_UP > 0 or pressed & w4.BUTTON_RIGHT > 0) {
+                    state.action_target = if (state.action_target == state.action_target_count - 1) 0 else state.action_target + 1;
+                } else if (pressed & w4.BUTTON_DOWN > 0 or pressed & w4.BUTTON_LEFT > 0) {
+                    state.action_target = if (state.action_target == 0) state.action_target_count - 1 else state.action_target - 1;
+                }
             }
         },
         .response => {
@@ -666,6 +717,26 @@ pub fn update(global_state: anytype, pressed: u8) void {
     }
 
     { // draw HUD
+        if (state.turn_state == .aim) {
+            w4.DRAW_COLORS.* = 0x04;
+
+            w4.text("AIM", 1, w4.SCREEN_SIZE - (8 + 1) * 2);
+
+            var i: usize = 0;
+            while (i < state.action_target_count) : (i += 1) {
+                w4.DRAW_COLORS.* = 0x40;
+                const screen_pos = world_to_screen(state, state.action_targets[i]);
+                w4.blit(
+                    if (i == state.action_target) &sprites.tile_reticule_active else &sprites.tile_reticule_inactive,
+                    screen_pos.x,
+                    screen_pos.y,
+                    8,
+                    8,
+                    w4.BLIT_1BPP,
+                );
+            }
+        }
+
         { // draw health bar
             w4.DRAW_COLORS.* = 0x40;
 
