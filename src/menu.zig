@@ -21,12 +21,12 @@ pub fn update(global_state: anytype, pressed: u8) void {
             w4.text("\x81 CONTROLS", 16, w4.SCREEN_SIZE - (8 + 4));
 
             if (pressed & w4.BUTTON_1 != 0) {
-                sfx.menu_bip();
+                sfx.walk();
                 global_state.screen = .game;
                 global_state.game_state.reset();
                 global_state.game_state.load_level(0);
             } else if (pressed & w4.BUTTON_2 != 0) {
-                sfx.menu_bip();
+                sfx.walk();
                 global_state.menu_state = .controls;
             }
         },
@@ -41,7 +41,7 @@ pub fn update(global_state: anytype, pressed: u8) void {
             w4.text("  CANCEL AIM", 10, 40 + (8 + 1) * 9);
 
             if (pressed & (w4.BUTTON_1 | w4.BUTTON_2) > 0) {
-                sfx.menu_bip();
+                sfx.walk();
                 global_state.menu_state = .main;
             }
         },

@@ -25,23 +25,23 @@ const Player = struct {
 
     pub const Item = enum(u8) { fists, sword, small_axe };
 
-    pub inline fn has_item(self: Player, item: Item) bool {
+    pub fn has_item(self: Player, item: Item) bool {
         return (self.items & (@as(u8, 1) << @intCast(u3, @enumToInt(item)))) > 0;
     }
 
-    pub inline fn give_item(self: *Player, item: Item) void {
+    pub fn give_item(self: *Player, item: Item) void {
         self.items |= (@as(u8, 1) << @intCast(u3, @enumToInt(item)));
         self.active_item = item;
     }
 
-    pub inline fn remove_item(self: *Player, item: Item) void {
+    pub fn remove_item(self: *Player, item: Item) void {
         self.items &= ~(@as(u8, 1) << @intCast(u3, @enumToInt(item)));
         if (self.active_item == item) {
             self.active_item = if (self.has_item(.sword)) .sword else .fists;
         }
     }
 
-    pub inline fn get_damage(self: Player) u4 {
+    pub fn get_damage(self: Player) u4 {
         return switch (self.active_item) {
             .fists => 1,
             .sword => 3,
@@ -63,7 +63,7 @@ const Pickup = struct {
 
 pub const State = struct {
     turn_state: enum { ready, aim, response, complete } = .ready,
-    turn: u8 = 0,
+    // turn: u8 = 0,
     level: u8 = 0,
     action_target: u8 = 0,
     action_targets: [16]world.Location,
@@ -83,7 +83,7 @@ pub const State = struct {
     pub fn reset(self: *@This()) void {
         w4.trace("reset");
         self.turn_state = .ready;
-        self.turn = 0;
+        // self.turn = 0;
         self.player.entity.health = max_player_health;
         self.player.active_item = .fists;
         self.player.items = 0b1;
@@ -147,7 +147,7 @@ pub const State = struct {
 
         update_world_lightmap(self);
 
-        self.turn = 0;
+        // self.turn = 0;
     }
 
     fn spawn_pickup(self: *@This(), location: world.Location, kind: anytype) void {
@@ -253,6 +253,8 @@ fn try_hit_enemy(state: *State, location: world.Location) bool {
 fn try_cycle_item(state: *State) void {
     w4.trace("cycle item");
 
+    sfx.walk();
+
     const T = @TypeOf(state.player.items);
     const max = std.meta.fields(Player.Item).len;
     var item = @enumToInt(state.player.active_item);
@@ -279,8 +281,18 @@ fn find_action_targets(state: *State) void {
                 state.player.entity.location.west(),
             }) |location| {
                 if (world.map_get_tile_kind(state.world, location) != .wall) {
-                    state.action_targets[state.action_target_count] = location;
-                    state.action_target_count += 1;
+                    for (state.monsters) |*monster| {
+                        if (monster.entity.health > 0 and monster.entity.location.eql(location)) {
+                            state.action_targets[state.action_target_count] = monster.entity.location;
+                            state.action_target_count += 1;
+                        }
+                    }
+                    for (state.fire_monsters) |*monster| {
+                        if (monster.entity.health > 0 and monster.entity.location.eql(location)) {
+                            state.action_targets[state.action_target_count] = monster.entity.location;
+                            state.action_target_count += 1;
+                        }
+                    }
                 }
             }
         },
@@ -653,36 +665,12 @@ pub fn update(global_state: anytype, pressed: u8) void {
             } else if (pressed & w4.BUTTON_2 != 0) {
                 cancel_aim(state);
             } else if (state.action_target_count > 0) {
-                switch (state.player.active_item) {
-                    .fists, .sword => { // melee
-                        var i: usize = 0;
-                        while (i < state.action_target_count) : (i += 1) {
-                            if (state.action_targets[i].eql(state.player.entity.location.north())) {
-                                if (pressed & w4.BUTTON_UP > 0) {
-                                    state.action_target = @enumToInt(world.Direction.north);
-                                }
-                            } else if (state.action_targets[i].eql(state.player.entity.location.east())) {
-                                if (pressed & w4.BUTTON_RIGHT > 0) {
-                                    state.action_target = @enumToInt(world.Direction.east);
-                                }
-                            } else if (state.action_targets[i].eql(state.player.entity.location.south())) {
-                                if (pressed & w4.BUTTON_DOWN > 0) {
-                                    state.action_target = @enumToInt(world.Direction.south);
-                                }
-                            } else if (state.action_targets[i].eql(state.player.entity.location.west())) {
-                                if (pressed & w4.BUTTON_LEFT > 0) {
-                                    state.action_target = @enumToInt(world.Direction.west);
-                                }
-                            }
-                        }
-                    },
-                    .small_axe => { // ranged
-                        if (pressed & w4.BUTTON_UP > 0 or pressed & w4.BUTTON_RIGHT > 0) {
-                            state.action_target = if (state.action_target == state.action_target_count - 1) 0 else state.action_target + 1;
-                        } else if (pressed & w4.BUTTON_DOWN > 0 or pressed & w4.BUTTON_LEFT > 0) {
-                            state.action_target = if (state.action_target == 0) state.action_target_count - 1 else state.action_target - 1;
-                        }
-                    },
+                if (pressed & w4.BUTTON_UP > 0 or pressed & w4.BUTTON_RIGHT > 0) {
+                    sfx.walk();
+                    state.action_target = if (state.action_target == state.action_target_count - 1) 0 else state.action_target + 1;
+                } else if (pressed & w4.BUTTON_DOWN > 0 or pressed & w4.BUTTON_LEFT > 0) {
+                    sfx.walk();
+                    state.action_target = if (state.action_target == 0) state.action_target_count - 1 else state.action_target - 1;
                 }
             }
         },
@@ -693,7 +681,7 @@ pub fn update(global_state: anytype, pressed: u8) void {
             if (state.player.entity.health <= 0) {
                 global_state.screen = .dead;
             }
-            state.turn += 1;
+            // state.turn += 1;
             state.turn_state = .ready;
         },
     }
@@ -836,7 +824,7 @@ pub fn update(global_state: anytype, pressed: u8) void {
         if (state.turn_state == .aim) {
             w4.DRAW_COLORS.* = 0x04;
 
-            w4.text("AIM", 1, w4.SCREEN_SIZE - (8 + 1) * 2);
+            w4.text(if (state.action_target_count == 0) "NO TARGETS" else "AIM", 1, w4.SCREEN_SIZE - (8 + 1) * 2);
 
             var i: usize = 0;
             while (i < state.action_target_count) : (i += 1) {

@@ -45,19 +45,19 @@ pub const Location = struct {
         return @intCast(u8, dx + dy);
     }
 
-    pub inline fn north(self: Location) Location {
+    pub fn north(self: Location) Location {
         return Location{ .x = self.x, .y = self.y - 1 };
     }
 
-    pub inline fn east(self: Location) Location {
+    pub fn east(self: Location) Location {
         return Location{ .x = self.x + 1, .y = self.y };
     }
 
-    pub inline fn south(self: Location) Location {
+    pub fn south(self: Location) Location {
         return Location{ .x = self.x, .y = self.y + 1 };
     }
 
-    pub inline fn west(self: Location) Location {
+    pub fn west(self: Location) Location {
         return Location{ .x = self.x - 1, .y = self.y };
     }
 };
