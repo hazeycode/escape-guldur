@@ -35,14 +35,14 @@ pub const Location = struct {
         return self.x == other.x and self.y == other.y;
     }
 
-    pub fn manhattan_to(self: Location, other: Location) i16 {
+    pub fn manhattan_to(self: Location, other: Location) u8 {
         var dx = @intCast(i16, other.x) - @intCast(i16, self.x);
         var dy = @intCast(i16, other.y) - @intCast(i16, self.y);
 
         if (dx < 0) dx = -dx;
         if (dy < 0) dy = -dy;
 
-        return @intCast(i16, dx + dy);
+        return @intCast(u8, dx + dy);
     }
 
     pub inline fn north(self: Location) Location {

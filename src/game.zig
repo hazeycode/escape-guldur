@@ -264,14 +264,36 @@ fn end_move(state: *State) void {
             w4.trace("monster: begin move...");
             defer w4.trace("monster: move complete");
 
-            const d = monster.entity.location.manhattan_to(state.player.entity.location);
+            var dx = @intCast(i16, state.player.entity.location.x) - @intCast(i16, monster.entity.location.x);
+            var dy = @intCast(i16, state.player.entity.location.y) - @intCast(i16, monster.entity.location.y);
+            const manhattan_dist = @intCast(u8, (if (dx < 0) -dx else dx) + if (dy < 0) -dy else dy);
 
-            if (d == 1) {
+            if (manhattan_dist == 1) {
                 w4.trace("monster: hit player!");
                 w4.tone(300, 2 | (4 << 8), 100, w4.TONE_NOISE);
                 state.player.entity.health -= 2;
                 break :find_move;
-            } else if (d < 10) {
+            } else if (manhattan_dist <= 3) {
+                w4.trace("monster: approach player");
+
+                var possible_location = monster.entity.location;
+
+                if (dx == 0 or dy == 0) {
+                    w4.trace("monster: orthogonal, step closer");
+                    if (dx != 0) possible_location.x += @divTrunc(dx, -dx) else if (dy != 0) possible_location.y += @divTrunc(dy, -dy);
+                } else {
+                    w4.trace("monster: on diagonal (roll dice)");
+                    switch (rng.random().int(u1)) {
+                        0 => possible_location.x += @divTrunc(dx, dx),
+                        1 => possible_location.y += @divTrunc(dy, dy),
+                    }
+                }
+
+                if (test_walkable(state, possible_location)) {
+                    monster.entity.location = possible_location;
+                    break :find_move;
+                }
+            } else if (manhattan_dist < 10) {
                 const res = world.check_line_of_sight(
                     WorldMap,
                     state.world,
@@ -281,24 +303,18 @@ fn end_move(state: *State) void {
                 if (res.hit_target) {
                     w4.trace("monster: chase player!");
 
-                    { // find best tile to get closer to player
-                        var min_dist = d;
-                        const possible: [4]world.Location = .{
+                    { // find a walkable tile that gets closer to player
+                        const possible_locations: [4]world.Location = .{
                             monster.entity.location.north(),
                             monster.entity.location.east(),
                             monster.entity.location.south(),
                             monster.entity.location.west(),
                         };
-                        for (&possible) |new_location| {
+                        for (&possible_locations) |new_location| {
                             if (test_walkable(state, new_location)) {
-                                const dist = new_location.manhattan_to(state.player.entity.location);
-                                if (dist < min_dist) {
+                                if (new_location.manhattan_to(state.player.entity.location) < manhattan_dist) {
                                     monster.entity.location = new_location;
-                                    min_dist = dist;
-                                } else if (dist == min_dist) {
-                                    if (state.player.entity.location.x != new_location.x) {
-                                        monster.entity.location = new_location;
-                                    }
+                                    break;
                                 }
                             }
                         }
@@ -345,6 +361,8 @@ fn end_move(state: *State) void {
 
 /// Returns true if the location is not occupied by a blocking tile or blocking entity
 fn test_walkable(state: *State, location: world.Location) bool {
+    w4.trace("test location walkable");
+
     const kind = world.map_get_tile_kind(state.world, location);
     if (kind == .wall or kind == .locked_door) {
         return false;
