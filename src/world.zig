@@ -25,7 +25,7 @@ pub const MapTileKind = enum(u4) {
     fire_monster_spawn = 12,
 };
 
-pub const Direction = enum(u2) { north, east, south, west };
+pub const Direction = enum { north, east, south, west };
 
 pub const Location = struct {
     x: i16,
@@ -64,7 +64,7 @@ pub const Location = struct {
 
 pub const Path = struct {
     locations: [max_distance]Location = undefined,
-    len: usize = 0,
+    length: usize = 0,
 };
 
 pub const LineOfSightResult = struct {
@@ -86,8 +86,8 @@ pub fn check_line_of_sight(
         pub fn plot(self: *@This(), x: i32, y: i32) bool {
             const location = Location{ .x = @intCast(u8, x), .y = @intCast(u8, y) };
 
-            self.result.path.locations[self.result.path.len] = location;
-            self.result.path.len += 1;
+            self.result.path.locations[self.result.path.length] = location;
+            self.result.path.length += 1;
 
             if (location.eql(self.target)) {
                 self.result.hit_target = true;

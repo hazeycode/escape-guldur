@@ -160,13 +160,13 @@ fn try_move(state: *State, pos: world.Location) void {
             return;
         },
         else => {
-            var monster_killed = false;
+            var monster_hit = false;
             for (state.monsters) |*monster| {
                 if (monster.entity.health > 0 and
                     monster.entity.location.eql(pos))
                 {
                     monster.entity.health -= 1;
-                    monster_killed = true;
+                    monster_hit = true;
                 }
             }
             for (state.fire_monsters) |*fire_monster| {
@@ -174,7 +174,7 @@ fn try_move(state: *State, pos: world.Location) void {
                     fire_monster.entity.location.eql(pos))
                 {
                     fire_monster.entity.health -= 1;
-                    monster_killed = true;
+                    monster_hit = true;
                 }
             }
 
@@ -191,7 +191,7 @@ fn try_move(state: *State, pos: world.Location) void {
                 }
             }
 
-            if (monster_killed) {
+            if (monster_hit) {
                 w4.tone(
                     880 | (440 << 16),
                     2 | (4 << 8),
@@ -200,7 +200,7 @@ fn try_move(state: *State, pos: world.Location) void {
                 );
             } else {
                 state.player.entity.location = pos;
-                w4.tone(220, 2 | (4 << 8), 80, w4.TONE_TRIANGLE);
+                w4.tone(220, 2 | (4 << 8), 70, w4.TONE_TRIANGLE);
             }
         },
     }
@@ -247,7 +247,7 @@ fn end_move(state: *State) void {
 
     for (state.fire) |*fire| {
         if (fire.entity.health > 0) {
-            move_fire(state, fire);
+            update_fire(state, fire);
         }
     }
 
@@ -271,8 +271,6 @@ fn end_move(state: *State) void {
                     state.player.entity.location,
                 );
                 if (res.hit_target) {
-                    std.debug.assert(res.path.len > 1);
-
                     w4.trace("monster: chase player!");
 
                     { // find best tile to get closer to player
@@ -343,16 +341,16 @@ fn test_walkable(state: *State, location: world.Location) bool {
     if (kind == .wall or kind == .locked_door) {
         return false;
     }
-    if (state.player.entity.location.eql(location)) {
+    if (state.player.entity.health > 0 and state.player.entity.location.eql(location)) {
         return false;
     }
     for (state.monsters) |*other| {
-        if (other.entity.location.eql(location)) {
+        if (other.entity.health > 0 and other.entity.location.eql(location)) {
             return false;
         }
     }
     for (state.fire_monsters) |*other| {
-        if (other.entity.location.eql(location)) {
+        if (other.entity.health > 0 and other.entity.location.eql(location)) {
             return false;
         }
     }
@@ -369,43 +367,44 @@ fn spawn_fire(state: *State, path: world.Path) void {
                 .health = 1,
             },
         };
-        new_fire.path.len = path.len - 1;
+        new_fire.path.length = path.length;
         var i: usize = 0;
-        while (i < new_fire.path.len - 1) : (i += 1) {
+        while (i < path.length - 1) : (i += 1) {
             new_fire.path.locations[i] = path.locations[i + 1];
         }
         state.fire[state.fire_count] = new_fire;
-        move_fire(state, &state.fire[state.fire_count]);
+        update_fire(state, &state.fire[state.fire_count]);
         state.fire_count += 1;
     }
 }
 
-fn move_fire(state: *State, fire: *Enemy) void {
-    w4.trace("move fire");
+fn update_fire(state: *State, fire: *Enemy) void {
+    w4.trace("update fire");
 
-    if (fire.path.len > 0) {
+    if (fire.path.length > 0) {
         var i: usize = 0;
-        while (i < fire.path.len - 1) : (i += 1) {
+        while (i < fire.path.length - 2) : (i += 1) {
             fire.path.locations[i] = fire.path.locations[i + 1];
         }
-        fire.path.len -= 1;
+        fire.path.length -= 1;
 
         fire.entity.location = fire.path.locations[0];
 
-        if (fire.entity.location.eql(state.player.entity.location)) {
-            w4.trace("fire hit player!");
-            w4.tone(300, 2 | (4 << 8), 100, w4.TONE_NOISE);
-            state.player.entity.health -= 1;
-        }
-
         if (world.map_get_tile_kind(state.world, fire.entity.location) != .wall) {
+            if (fire.entity.location.eql(state.player.entity.location)) {
+                w4.trace("fire hit player!");
+                w4.tone(300, 2 | (4 << 8), 100, w4.TONE_NOISE);
+                state.player.entity.health -= 1;
+            }
             return;
         }
     }
 
     fire.entity.health = 0;
-    fire.path.len = 0;
+    fire.path.length = 0;
     state.fire_count -= 1;
+
+    w4.trace("fire extinguished");
 }
 
 /// finds walkable adjacent tile (random walk), remains still if there are none walkable
@@ -417,15 +416,14 @@ fn random_walk(state: *State, entity: *Entity) void {
 
     var random_dir = @intToEnum(world.Direction, @mod(rng.random().int(u8), 3));
 
-    var possible_location = switch (random_dir) {
-        .north => north,
-        .east => east,
-        .south => south,
-        .west => west,
-    };
-
     var i: usize = 0;
     while (i < 4) : (i += 1) {
+        const possible_location = switch (random_dir) {
+            .north => north,
+            .east => east,
+            .south => south,
+            .west => west,
+        };
         if (test_walkable(state, possible_location)) {
             entity.location = possible_location;
         }
