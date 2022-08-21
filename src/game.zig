@@ -5,6 +5,7 @@ const std = @import("std");
 const sqrt = std.math.sqrt;
 var rng = std.rand.DefaultPrng.init(42);
 
+const sfx = @import("sfx.zig");
 const sprites = @import("sprites.zig");
 const world = @import("world.zig");
 
@@ -61,6 +62,9 @@ const Pickup = struct {
 };
 
 pub const State = struct {
+    turn_state: enum { ready, response, complete } = .ready,
+    turn: u8 = 0,
+    level: u8 = 0,
     world: WorldMap,
     world_light_map: WorldMap,
     player: Player,
@@ -68,15 +72,15 @@ pub const State = struct {
     fire_monsters: [8]Enemy,
     fire: [16]Enemy,
     pickups: [8]Pickup,
-    monster_count: u8,
-    fire_monster_count: u8,
-    fire_count: u8,
-    pickup_count: u8,
-    turn: u8 = 0,
-    level: u8 = 0,
+    monster_count: u8 = 0,
+    fire_monster_count: u8 = 0,
+    fire_count: u8 = 0,
+    pickup_count: u8 = 0,
 
     pub fn reset(self: *@This()) void {
         w4.trace("reset");
+        self.turn_state = .ready;
+        self.turn = 0;
         self.player.entity.health = max_player_health;
         self.player.active_item = .fists;
         self.player.items = 0b1;
@@ -84,6 +88,8 @@ pub const State = struct {
 
     pub fn load_level(self: *@This(), level: u8) void {
         w4.trace("load_level");
+
+        self.turn_state = .ready;
 
         self.level = level;
         self.world = levels[level];
@@ -161,34 +167,38 @@ fn world_to_screen(state: *State, location: world.Location) ScreenPosition {
     };
 }
 
-fn try_move(state: *State, pos: world.Location) void {
-    switch (world.map_get_tile_kind(state.world, pos)) {
+fn try_move(state: *State, location: world.Location) void {
+    switch (world.map_get_tile_kind(state.world, location)) {
         .wall => {
             // you shall not pass!
             return;
         },
-        else => {
-            var monster_hit = false;
+        else => find_move: {
             for (state.monsters) |*monster| {
                 if (monster.entity.health > 0 and
-                    monster.entity.location.eql(pos))
+                    monster.entity.location.eql(location))
                 {
                     monster.entity.health -= state.player.get_damage();
-                    monster_hit = true;
+                    sfx.deal_damage();
+                    commit_move(state);
+                    break :find_move;
                 }
             }
+
             for (state.fire_monsters) |*fire_monster| {
                 if (fire_monster.entity.health > 0 and
-                    fire_monster.entity.location.eql(pos))
+                    fire_monster.entity.location.eql(location))
                 {
                     fire_monster.entity.health -= state.player.get_damage();
-                    monster_hit = true;
+                    sfx.deal_damage();
+                    commit_move(state);
+                    break :find_move;
                 }
             }
 
             for (state.pickups) |*pickup| {
                 if (pickup.entity.health > 0 and
-                    pickup.entity.location.eql(pos))
+                    pickup.entity.location.eql(location))
                 {
                     switch (pickup.kind) {
                         .health => state.player.entity.health += 2,
@@ -196,24 +206,17 @@ fn try_move(state: *State, pos: world.Location) void {
                         .small_axe => state.player.give_item(.small_axe),
                     }
                     pickup.entity.health = 0;
+
+                    commit_move(state);
+                    break :find_move;
                 }
             }
 
-            if (monster_hit) {
-                w4.tone(
-                    880 | (440 << 16),
-                    2 | (4 << 8),
-                    100,
-                    w4.TONE_PULSE1,
-                );
-            } else {
-                state.player.entity.location = pos;
-                w4.tone(220, 2 | (4 << 8), 70, w4.TONE_TRIANGLE);
-            }
+            state.player.entity.location = location;
+            sfx.walk();
+            commit_move(state);
         },
     }
-
-    end_move(state);
 }
 
 fn try_use_item(_: *State) void {
@@ -237,12 +240,22 @@ fn try_cycle_item(state: *State) void {
     }
 }
 
-fn end_move(state: *State) void {
+fn commit_move(state: *State) void {
+    w4.trace("commit move");
+
+    // TODO: animate move before state change
+    state.turn_state = .response;
+}
+
+fn respond_to_move(state: *State) void {
+    w4.trace("responding to move...");
+
     defer {
         if (state.player.entity.health < 0) state.player.entity.health = 0;
-    }
 
-    w4.trace("responding to move...");
+        // TODO: animate reponse to move before state change
+        state.turn_state = .complete;
+    }
 
     if (world.map_get_tile_kind(state.world, state.player.entity.location) == .door) {
         state.level += 1;
@@ -490,29 +503,36 @@ pub fn update(global_state: anytype, pressed: u8) void {
 
     var state = &global_state.game_state;
 
-    if (state.player.entity.health <= 0) {
-        global_state.screen = .dead;
-    }
-
-    if (pressed & w4.BUTTON_UP != 0) {
-        try_move(state, state.player.entity.location.north());
-    } else if (pressed & w4.BUTTON_RIGHT != 0) {
-        try_move(state, state.player.entity.location.east());
-    } else if (pressed & w4.BUTTON_DOWN != 0) {
-        try_move(state, state.player.entity.location.south());
-    } else if (pressed & w4.BUTTON_LEFT != 0) {
-        try_move(state, state.player.entity.location.west());
-    } else if (pressed & w4.BUTTON_1 != 0) {
-        try_use_item(state);
-    } else if (pressed & w4.BUTTON_2 != 0) {
-        try_cycle_item(state);
-    }
-
-    if (state.level == levels.len) {
-        global_state.screen = .win;
+    switch (state.turn_state) {
+        .ready => {
+            if (pressed & w4.BUTTON_1 != 0) {
+                try_use_item(state);
+            } else if (pressed & w4.BUTTON_2 != 0) {
+                try_cycle_item(state);
+            } else if (pressed & w4.BUTTON_UP != 0) {
+                try_move(state, state.player.entity.location.north());
+            } else if (pressed & w4.BUTTON_RIGHT != 0) {
+                try_move(state, state.player.entity.location.east());
+            } else if (pressed & w4.BUTTON_DOWN != 0) {
+                try_move(state, state.player.entity.location.south());
+            } else if (pressed & w4.BUTTON_LEFT != 0) {
+                try_move(state, state.player.entity.location.west());
+            }
+        },
+        .response => {
+            respond_to_move(state);
+        },
+        .complete => {
+            if (state.player.entity.health <= 0) {
+                global_state.screen = .dead;
+            }
+            state.turn += 1;
+            state.turn_state = .ready;
+        },
     }
 
     { // draw world
+
         var location: world.Location = .{ .x = 0, .y = 0 };
         while (location.x < world.size_x) : (location.x += 1) {
             defer location.y = 0;
@@ -610,7 +630,7 @@ pub fn update(global_state: anytype, pressed: u8) void {
         }
     }
 
-    { // draw player sprite
+    { // draw player
         w4.DRAW_COLORS.* = 0x20;
 
         const screen_pos = world_to_screen(state, state.player.entity.location);
@@ -645,7 +665,7 @@ pub fn update(global_state: anytype, pressed: u8) void {
         }
     }
 
-    { // draw hud
+    { // draw HUD
         { // draw health bar
             w4.DRAW_COLORS.* = 0x40;
 
