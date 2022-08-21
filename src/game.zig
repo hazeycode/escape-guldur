@@ -37,7 +37,7 @@ const Player = struct {
     pub inline fn remove_item(self: *Player, item: Item) void {
         self.items &= ~(@as(u8, 1) << @intCast(u3, @enumToInt(item)));
         if (self.active_item == item) {
-            self.active_item = .fists;
+            self.active_item = if (self.has_item(.sword)) .sword else .fists;
         }
     }
 
@@ -563,6 +563,11 @@ fn update_world_lightmap(state: *State) void {
     while (location.x < world.size_x) : (location.x += 1) {
         defer location.y = 0;
         while (location.y < world.size_y) : (location.y += 1) {
+            if (world.map_get_tile_kind(state.world, location) == .door) {
+                world.map_set_tile(&state.world_light_map, location, 1);
+                continue;
+            }
+
             if (location.manhattan_to(state.player.entity.location) > 13) {
                 world.map_set_tile(&state.world_light_map, location, @as(u8, 0));
             } else {
