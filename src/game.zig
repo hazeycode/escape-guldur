@@ -199,6 +199,8 @@ fn try_move(state: *State, location: world.Location) void {
 
                     sfx.pickup();
 
+                    state.player.entity.location = location;
+
                     commit_move(state);
                     break :find_move;
                 }
