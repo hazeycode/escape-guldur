@@ -39,6 +39,14 @@ const Player = struct {
             self.active_item = .fists;
         }
     }
+
+    pub inline fn get_damage(self: Player) u4 {
+        return switch (self.active_item) {
+            .fists => 1,
+            .sword => 2,
+            .small_axe => 1,
+        };
+    }
 };
 
 const Enemy = struct {
@@ -165,7 +173,7 @@ fn try_move(state: *State, pos: world.Location) void {
                 if (monster.entity.health > 0 and
                     monster.entity.location.eql(pos))
                 {
-                    monster.entity.health -= 1;
+                    monster.entity.health -= state.player.get_damage();
                     monster_hit = true;
                 }
             }
@@ -173,7 +181,7 @@ fn try_move(state: *State, pos: world.Location) void {
                 if (fire_monster.entity.health > 0 and
                     fire_monster.entity.location.eql(pos))
                 {
-                    fire_monster.entity.health -= 1;
+                    fire_monster.entity.health -= state.player.get_damage();
                     monster_hit = true;
                 }
             }
