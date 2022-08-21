@@ -437,57 +437,52 @@ fn test_walkable(state: *State, location: world.Location) bool {
 
 fn spawn_fire(state: *State, path: world.Path) void {
     w4.trace("spawn fire");
-    _ = state;
-    _ = path;
 
-    // if (state.fire_count < state.fire.len) {
-    //     var new_fire = Enemy{
-    //         .entity = .{
-    //             .location = path.locations[0],
-    //             .health = 1,
-    //         },
-    //     };
-    //     new_fire.path.length = path.length;
-    //     var i: usize = 0;
-    //     while (i < path.length - 1) : (i += 1) {
-    //         new_fire.path.locations[i] = path.locations[i + 1];
-    //     }
-    //     state.fire[state.fire_count] = new_fire;
-    //     update_fire(state, &state.fire[state.fire_count]);
-    //     state.fire_count += 1;
-    // }
+    if (state.fire_count < state.fire.len) {
+        var new_fire = Enemy{
+            .entity = .{
+                .location = path.locations[0],
+                .health = 1,
+            },
+        };
+        std.mem.copy(world.Location, new_fire.path.locations[0..], path.locations[1..]);
+        new_fire.path.length = std.math.min(path.length - 1, path.locations.len);
+        state.fire[state.fire_count] = new_fire;
+        state.fire_count += 1;
+        // update_fire(state, &state.fire[state.fire_count - 1]);
+    }
 }
 
 fn update_fire(state: *State, fire: *Enemy) void {
     w4.trace("update fire");
 
-    _ = state;
-    _ = fire;
+    if (fire.path.length > 0) {
+        var i: usize = 0;
+        while (i < fire.path.length - 1) : (i += 1) {
+            fire.path.locations[i] = fire.path.locations[i + 1];
+        }
+        fire.path.length -= 1;
 
-    // if (fire.path.length > 0) {
-    //     var i: usize = 0;
-    //     while (i < fire.path.length - 2) : (i += 1) {
-    //         fire.path.locations[i] = fire.path.locations[i + 1];
-    //     }
-    //     fire.path.length -= 1;
+        fire.entity.location = fire.path.locations[0];
 
-    //     fire.entity.location = fire.path.locations[0];
+        w4.trace("fire walk path");
 
-    //     if (world.map_get_tile_kind(state.world, fire.entity.location) != .wall) {
-    //         if (fire.entity.location.eql(state.player.entity.location)) {
-    //             w4.trace("fire hit player!");
-    //             w4.tone(300, 2 | (4 << 8), 100, w4.TONE_NOISE);
-    //             state.player.entity.health -= 1;
-    //         }
-    //         return;
-    //     }
-    // }
+        if (world.map_get_tile_kind(state.world, fire.entity.location) != .wall) {
+            if (fire.entity.location.eql(state.player.entity.location)) {
+                w4.trace("fire hit player!");
+                w4.tone(300, 2 | (4 << 8), 100, w4.TONE_NOISE);
+                state.player.entity.health -= 1;
+            }
+        }
 
-    // fire.entity.health = 0;
-    // fire.path.length = 0;
-    // state.fire_count -= 1;
+        return;
+    }
 
-    // w4.trace("fire extinguished");
+    fire.entity.health = 0;
+    fire.path.length = 0;
+    state.fire_count -= 1;
+
+    w4.trace("fire extinguished");
 }
 
 /// finds walkable adjacent tile or ramains still (random walk)

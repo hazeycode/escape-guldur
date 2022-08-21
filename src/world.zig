@@ -5,7 +5,7 @@ const bresenham_line = @import("bresenham.zig").line;
 
 pub const size_x = 20;
 pub const size_y = 20;
-const max_distance = 32;
+const max_distance = size_x + size_y;
 
 pub fn Map(comptime columns: u8, comptime rows: u8) type {
     return [columns][rows]u4;
