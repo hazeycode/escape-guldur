@@ -19,21 +19,25 @@ const Entity = struct {
 
 const Player = struct {
     entity: Entity,
-    items: u8 = 0,
-    active_item: u8 = 0,
+    items: u8,
+    active_item: Item,
 
-    pub const Item = enum(u4) { sword, small_axe };
+    pub const Item = enum(u8) { fists, sword, small_axe };
 
     pub inline fn has_item(self: Player, item: Item) bool {
-        return self.items & (@as(u8, 1) << @intCast(u3, @enumToInt(item)));
+        return (self.items & (@as(u8, 1) << @intCast(u3, @enumToInt(item)))) > 0;
     }
 
     pub inline fn give_item(self: *Player, item: Item) void {
         self.items |= (@as(u8, 1) << @intCast(u3, @enumToInt(item)));
+        self.active_item = item;
     }
 
     pub inline fn remove_item(self: *Player, item: Item) void {
         self.items &= ~(@as(u8, 1) << @intCast(u3, @enumToInt(item)));
+        if (self.active_item == item) {
+            self.active_item = .fists;
+        }
     }
 };
 
@@ -66,6 +70,8 @@ pub const State = struct {
     pub fn reset(self: *@This()) void {
         w4.trace("reset");
         self.player.entity.health = max_player_health;
+        self.player.active_item = .fists;
+        self.player.items = 0b1;
     }
 
     pub fn load_level(self: *@This(), level: u8) void {
@@ -209,11 +215,17 @@ fn try_use_item(_: *State) void {
 fn try_cycle_item(state: *State) void {
     w4.trace("cycle item");
 
-    const max = std.math.maxInt(@TypeOf(state.player.active_item));
-    if (state.player.active_item == max - 1) {
-        state.player.active_item = max;
-    } else {
-        state.player.active_item += 1;
+    const T = @TypeOf(state.player.items);
+    const max = std.meta.fields(Player.Item).len;
+    var item = @enumToInt(state.player.active_item);
+    var i: T = 0;
+    while (i < max) : (i += 1) {
+        item = @mod(item + 1, @as(u8, max));
+        if (state.player.has_item(@intToEnum(Player.Item, item))) {
+            state.player.active_item = @intToEnum(Player.Item, item);
+            break;
+        }
+        w4.trace("dont possess item");
     }
 }
 
@@ -614,25 +626,35 @@ pub fn update(global_state: anytype, pressed: u8) void {
         { // draw health bar
             w4.DRAW_COLORS.* = 0x40;
 
-            std.debug.assert(state.player.entity.health >= 0);
-            const health = @intCast(u16, state.player.entity.health);
             const piece_width: u16 = 8;
             const piece_height: u16 = 8;
-            const width: u16 = health * piece_width;
-            const y = @intCast(i32, w4.SCREEN_SIZE) - piece_height - 1;
-            var x: i32 = @intCast(i32, w4.SCREEN_SIZE) / 2 - width / 2;
-            var i: usize = 0;
-            while (i < state.player.entity.health) : (i += 1) {
-                w4.blit(
-                    &sprites.heart,
-                    x,
-                    y,
-                    piece_width,
-                    piece_height,
-                    w4.BLIT_1BPP,
-                );
-                x += piece_width;
+            if (state.player.entity.health > 0) {
+                const width: u16 = @bitCast(u8, state.player.entity.health) * piece_width;
+                const y = @intCast(i32, w4.SCREEN_SIZE) - piece_height - 1;
+                var x: i32 = @intCast(i32, w4.SCREEN_SIZE) - width - 1;
+                var i: usize = 0;
+                while (i < state.player.entity.health) : (i += 1) {
+                    w4.blit(
+                        &sprites.heart,
+                        x,
+                        y,
+                        piece_width,
+                        piece_height,
+                        w4.BLIT_1BPP,
+                    );
+                    x += piece_width;
+                }
             }
+        }
+
+        { // draw active item
+            w4.DRAW_COLORS.* = 0x04;
+            const str = switch (state.player.active_item) {
+                .fists => "FISTS",
+                .sword => "SWORD",
+                .small_axe => "THROWING AXE",
+            };
+            w4.text(str, 1, w4.SCREEN_SIZE - 8 - 1);
         }
     }
 }
