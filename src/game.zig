@@ -182,26 +182,8 @@ fn try_move(state: *State, location: world.Location) void {
             return;
         },
         else => find_move: {
-            for (state.monsters) |*monster| {
-                if (monster.entity.health > 0 and
-                    monster.entity.location.eql(location))
-                {
-                    monster.entity.health -= state.player.get_damage();
-                    sfx.deal_damage();
-                    commit_move(state);
-                    break :find_move;
-                }
-            }
-
-            for (state.fire_monsters) |*fire_monster| {
-                if (fire_monster.entity.health > 0 and
-                    fire_monster.entity.location.eql(location))
-                {
-                    fire_monster.entity.health -= state.player.get_damage();
-                    sfx.deal_damage();
-                    commit_move(state);
-                    break :find_move;
-                }
+            if (try_hit_enemy(state, location)) {
+                break :find_move;
             }
 
             for (state.pickups) |*pickup| {
@@ -227,6 +209,32 @@ fn try_move(state: *State, location: world.Location) void {
             commit_move(state);
         },
     }
+}
+
+fn try_hit_enemy(state: *State, location: world.Location) bool {
+    for (state.monsters) |*monster| {
+        if (monster.entity.health > 0 and
+            monster.entity.location.eql(location))
+        {
+            monster.entity.health -= state.player.get_damage();
+            sfx.deal_damage();
+            commit_move(state);
+            return true;
+        }
+    }
+
+    for (state.fire_monsters) |*fire_monster| {
+        if (fire_monster.entity.health > 0 and
+            fire_monster.entity.location.eql(location))
+        {
+            fire_monster.entity.health -= state.player.get_damage();
+            sfx.deal_damage();
+            commit_move(state);
+            return true;
+        }
+    }
+
+    return false;
 }
 
 fn try_cycle_item(state: *State) void {
@@ -264,9 +272,40 @@ fn find_action_targets(state: *State) void {
             }
         },
         .small_axe => { // ranged attack
-
+            for (state.monsters) |*monster| {
+                if (monster.entity.health > 0) {
+                    if (test_can_ranged_attack(state, monster.entity.location)) {
+                        state.action_targets[state.action_target_count] = monster.entity.location;
+                        state.action_target_count += 1;
+                    }
+                }
+            }
+            for (state.fire_monsters) |*monster| {
+                if (monster.entity.health > 0) {
+                    if (test_can_ranged_attack(state, monster.entity.location)) {
+                        state.action_targets[state.action_target_count] = monster.entity.location;
+                        state.action_target_count += 1;
+                    }
+                }
+            }
         },
     }
+}
+
+fn test_can_ranged_attack(state: *State, location: world.Location) bool {
+    const d = state.player.entity.location.manhattan_to(location);
+    if (d < 11) {
+        const res = world.check_line_of_sight(
+            WorldMap,
+            state.world,
+            state.player.entity.location,
+            location,
+        );
+        if (res.hit_target) {
+            return true;
+        }
+    }
+    return false;
 }
 
 fn commit_move(state: *State) void {
@@ -282,7 +321,7 @@ fn respond_to_move(state: *State) void {
     defer {
         if (state.player.entity.health < 0) state.player.entity.health = 0;
 
-        // TODO: animate reponse to move before state change
+        // TODO: animate response to move before state change
         state.turn_state = .complete;
     }
 
@@ -567,8 +606,17 @@ pub fn update(global_state: anytype, pressed: u8) void {
                 if (state.action_target_count == 0) {
                     cancel_aim(state);
                 } else {
-                    w4.trace("use item");
-                    try_move(state, state.action_targets[state.action_target]);
+                    w4.trace("commit action");
+                    const target_location = state.action_targets[state.action_target];
+                    if (try_hit_enemy(state, target_location)) {
+                        switch (state.player.active_item) {
+                            .small_axe => {
+                                state.player.remove_item(.small_axe);
+                                state.spawn_pickup(target_location, .small_axe);
+                            },
+                            else => {},
+                        }
+                    }
                 }
             } else if (pressed & w4.BUTTON_2 != 0) {
                 cancel_aim(state);
