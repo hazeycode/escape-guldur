@@ -584,7 +584,7 @@ pub fn update(global_state: anytype, pressed: u8) void {
 
     var state = &global_state.game_state;
 
-    if (state.level == levels.len - 1) {
+    if (state.level == levels.len) {
         global_state.screen = .win;
         return;
     }
