@@ -170,8 +170,8 @@ fn world_to_screen(state: *State, location: world.Location) ScreenPosition {
         cam_offset = state.action_targets[state.action_target];
     }
     return .{
-        .x = (@intCast(i32, location.x) - cam_offset.x) * 8 + w4.SCREEN_SIZE / 2,
-        .y = (@intCast(i32, location.y) - cam_offset.y) * 8 + w4.SCREEN_SIZE / 2,
+        .x = (location.x - cam_offset.x) * 8 + w4.SCREEN_SIZE / 2,
+        .y = (location.y - cam_offset.y) * 8 + w4.SCREEN_SIZE / 2,
     };
 }
 
@@ -305,8 +305,8 @@ fn respond_to_move(state: *State) void {
             w4.trace("monster: begin move...");
             defer w4.trace("monster: move complete");
 
-            var dx = @intCast(i32, state.player.entity.location.x) - @intCast(i32, monster.entity.location.x);
-            var dy = @intCast(i32, state.player.entity.location.y) - @intCast(i32, monster.entity.location.y);
+            var dx = state.player.entity.location.x - monster.entity.location.x;
+            var dy = state.player.entity.location.y - monster.entity.location.y;
             const manhattan_dist = @intCast(u8, (if (dx < 0) -dx else dx) + if (dy < 0) -dy else dy);
 
             if (manhattan_dist == 1) {
@@ -322,15 +322,15 @@ fn respond_to_move(state: *State) void {
                 if (dx == 0 or dy == 0) {
                     w4.trace("monster: orthogonal, step closer");
                     if (dx != 0) {
-                        possible_location.x += @intCast(u8, @divTrunc(dx, dx));
+                        possible_location.x += @divTrunc(dx, dx);
                     } else if (dy != 0) {
-                        possible_location.y += @intCast(u8, @divTrunc(dy, dy));
+                        possible_location.y += @divTrunc(dy, dy);
                     }
                 } else {
                     w4.trace("monster: on diagonal (roll dice)");
                     switch (rng.random().int(u1)) {
-                        0 => possible_location.x += @intCast(u8, @divTrunc(dx, dx)),
-                        1 => possible_location.y += @intCast(u8, @divTrunc(dy, dy)),
+                        0 => possible_location.x += @divTrunc(dx, dx),
+                        1 => possible_location.y += @divTrunc(dy, dy),
                     }
                 }
 

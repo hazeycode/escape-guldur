@@ -28,8 +28,8 @@ pub const MapTileKind = enum(u4) {
 pub const Direction = enum { north, east, south, west };
 
 pub const Location = struct {
-    x: u16,
-    y: u16,
+    x: i16,
+    y: i16,
 
     pub fn eql(self: @This(), other: @This()) bool {
         return self.x == other.x and self.y == other.y;
@@ -125,6 +125,10 @@ pub fn map_set_tile(world: anytype, location: Location, value: u4) void {
 
     //w4.trace("map_set_tile");
 
+    if (location.x < 0 or location.x > size_x or location.y < 0 or location.y > size_y) {
+        return;
+    }
+
     world[@intCast(usize, location.y)][@intCast(usize, location.x)] = value;
 }
 
@@ -136,6 +140,10 @@ pub fn map_get_tile(world: anytype, location: Location) u4 {
 
     //w4.trace("map_get_tile");
 
+    if (location.x < 0 or location.x > size_x or location.y < 0 or location.y > size_y) {
+        return 0;
+    }
+
     return world[@intCast(usize, location.y)][@intCast(usize, location.x)];
 }
 
@@ -146,6 +154,10 @@ pub fn map_get_tile_kind(world: anytype, location: Location) MapTileKind {
     }
 
     //w4.trace("map_get_tile_kind");
+
+    if (location.x < 0 or location.x > size_x or location.y < 0 or location.y > size_y) {
+        return .wall;
+    }
 
     return @intToEnum(
         MapTileKind,
