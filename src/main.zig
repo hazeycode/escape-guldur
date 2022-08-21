@@ -8,6 +8,7 @@ const Screen = enum { menu, game, dead, win };
 
 var state = struct {
     screen: Screen = .menu,
+    menu_state: menu.State = .main,
     game_state: game.State = undefined,
 }{};
 
