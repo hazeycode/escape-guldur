@@ -438,28 +438,22 @@ fn update_fire(state: *State, fire: *Enemy) void {
     // w4.trace("fire extinguished");
 }
 
-/// finds walkable adjacent tile (random walk), remains still if there are none walkable
+/// finds walkable adjacent tile or ramains still (random walk)
 fn random_walk(state: *State, entity: *Entity) void {
     const north = entity.location.north();
     const east = entity.location.east();
     const south = entity.location.south();
     const west = entity.location.west();
 
-    var random_dir = @intToEnum(world.Direction, @mod(rng.random().int(u8), 3));
+    var location = switch (@intToEnum(world.Direction, rng.random().int(u2))) {
+        .north => north,
+        .east => east,
+        .south => south,
+        .west => west,
+    };
 
-    var i: usize = 0;
-    while (i < 4) : (i += 1) {
-        const possible_location = switch (random_dir) {
-            .north => north,
-            .east => east,
-            .south => south,
-            .west => west,
-        };
-        if (test_walkable(state, possible_location)) {
-            entity.location = possible_location;
-        }
-
-        random_dir = @intToEnum(world.Direction, @mod(@enumToInt(random_dir) + 1, 3));
+    if (test_walkable(state, location)) {
+        entity.location = location;
     }
 }
 
