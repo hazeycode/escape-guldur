@@ -236,6 +236,16 @@ fn try_hit_enemy(state: *State, location: world.Location) bool {
         }
     }
 
+    for (state.fire) |*fire| {
+        if (fire.entity.health > 0 and
+            fire.entity.location.eql(location))
+        {
+            state.player.entity.health -= 1;
+            sfx.receive_damage();
+            return true;
+        }
+    }
+
     return false;
 }
 
@@ -353,7 +363,7 @@ fn respond_to_move(state: *State) void {
 
             if (manhattan_dist == 1) {
                 w4.trace("monster: hit player!");
-                w4.tone(300, 2 | (4 << 8), 100, w4.TONE_NOISE);
+                sfx.receive_damage();
                 state.player.entity.health -= 2;
                 break :find_move;
             } else if (manhattan_dist <= 3) {
@@ -434,6 +444,7 @@ fn respond_to_move(state: *State) void {
                 if (res.hit_target) {
                     w4.trace("fire_monster: spit at player");
                     spawn_fire(state, res.path);
+                    fire_monster.cooldown = 1;
                     break :find_move;
                 }
             }
@@ -491,7 +502,6 @@ fn spawn_fire(state: *State, path: world.Path) void {
         new_fire.path.length = std.math.min(path.length - 1, path.locations.len);
         state.fire[state.fire_count] = new_fire;
         state.fire_count += 1;
-        // update_fire(state, &state.fire[state.fire_count - 1]);
     }
 }
 
@@ -512,7 +522,7 @@ fn update_fire(state: *State, fire: *Enemy) void {
         if (world.map_get_tile_kind(state.world, fire.entity.location) != .wall) {
             if (fire.entity.location.eql(state.player.entity.location)) {
                 w4.trace("fire hit player!");
-                w4.tone(300, 2 | (4 << 8), 100, w4.TONE_NOISE);
+                sfx.receive_damage();
                 state.player.entity.health -= 1;
             }
         }
@@ -894,10 +904,10 @@ const levels: [4]WorldMap = .{
     @bitCast(WorldMap, [_]u4{
         1, 1, 1,  1, 3,  1, 1, 1, 1, 1, 1,  1,  1, 1, 1, 1, 1, 1, 1, 1,
         1, 1, 1,  0, 12, 0, 1, 1, 1, 1, 0,  0,  0, 1, 1, 0, 0, 0, 0, 1,
-        1, 1, 0,  0, 0,  0, 0, 0, 0, 0, 0,  0,  0, 0, 0, 0, 0, 0, 0, 1,
+        1, 1, 0,  0, 0,  0, 0, 0, 0, 0, 0,  0,  0, 0, 0, 0, 6, 0, 0, 1,
         1, 4, 11, 0, 0,  0, 0, 0, 0, 0, 0,  0,  0, 0, 0, 0, 0, 0, 0, 1,
         1, 1, 0,  0, 0,  0, 0, 0, 0, 0, 0,  0,  0, 0, 1, 0, 0, 0, 0, 1,
-        1, 1, 1,  1, 1,  1, 1, 1, 1, 1, 0,  0,  0, 1, 1, 0, 0, 0, 6, 1,
+        1, 1, 1,  1, 1,  1, 1, 1, 1, 1, 0,  0,  0, 1, 1, 0, 0, 0, 0, 1,
         1, 1, 1,  1, 1,  1, 1, 1, 1, 1, 0,  0,  0, 1, 1, 0, 0, 0, 0, 1,
         1, 1, 1,  1, 1,  1, 1, 1, 1, 1, 0,  0,  0, 0, 1, 1, 1, 1, 1, 1,
         1, 1, 1,  1, 1,  1, 1, 1, 1, 0, 0,  0,  0, 0, 0, 1, 1, 1, 1, 1,
@@ -930,7 +940,7 @@ const levels: [4]WorldMap = .{
         1, 0, 0,  0, 1, 0, 0, 11, 0, 0,  1, 1, 1, 1, 1,  1, 1,  1, 1, 1,
         1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
         1, 0, 0,  0, 1, 0, 0, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
-        1, 0, 0,  0, 1, 1, 1, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
+        1, 0, 0,  0, 1, 1, 1, 0,  0, 12, 0, 0, 0, 0, 0,  0, 0,  0, 0, 1,
         1, 0, 0,  0, 0, 0, 1, 0,  0, 0,  0, 0, 0, 0, 11, 0, 0,  0, 0, 1,
         1, 0, 10, 0, 0, 0, 1, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  5, 0, 1,
         1, 0, 0,  0, 0, 0, 1, 0,  0, 0,  0, 0, 0, 0, 0,  0, 0,  0, 0, 1,

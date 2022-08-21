@@ -1,7 +1,7 @@
 const w4 = @import("wasm4.zig");
 
 pub fn menu_bip() void {
-    w4.tone(440 | (880 << 16), 2 | (4 << 8), 80, w4.TONE_PULSE1);
+    w4.tone(100 | (220 << 16), 2 | (4 << 8), 90, w4.TONE_TRIANGLE);
 }
 
 pub fn walk() void {
@@ -13,5 +13,10 @@ pub fn pickup() void {
 }
 
 pub fn deal_damage() void {
-    w4.tone(880 | (440 << 16), 2 | (4 << 8), 100, w4.TONE_PULSE1);
+    w4.tone(600 | (220 << 16), 2 | (4 << 8), 100, w4.TONE_PULSE1);
+}
+
+pub fn receive_damage() void {
+    w4.tone(300, 2 | (4 << 8), 80, w4.TONE_NOISE);
+    w4.tone(300 | (100 << 16), 2 | (4 << 8), 100, w4.TONE_TRIANGLE);
 }
