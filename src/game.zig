@@ -613,14 +613,17 @@ pub fn update(global_state: anytype, pressed: u8) void {
                 } else {
                     w4.trace("commit action");
                     const target_location = state.action_targets[state.action_target];
-                    if (try_hit_enemy(state, target_location)) {
-                        switch (state.player.active_item) {
-                            .small_axe => {
-                                state.player.remove_item(.small_axe);
-                                state.spawn_pickup(target_location, .small_axe);
-                            },
-                            else => {},
-                        }
+                    switch (state.player.active_item) {
+                        .fists, .sword => try_move(state, target_location),
+                        .small_axe => if (try_hit_enemy(state, target_location)) {
+                            switch (state.player.active_item) {
+                                .small_axe => {
+                                    state.player.remove_item(.small_axe);
+                                    state.spawn_pickup(target_location, .small_axe);
+                                },
+                                else => {},
+                            }
+                        },
                     }
                 }
             } else if (pressed & w4.BUTTON_2 != 0) {
