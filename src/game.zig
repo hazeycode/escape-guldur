@@ -705,31 +705,6 @@ pub fn update(global_state: anytype, pressed: u8) void {
         }
     }
 
-    { // draw pickups
-        w4.DRAW_COLORS.* = 0x40;
-
-        for (state.pickups) |*pickup| {
-            if (pickup.entity.health > 0 and world.map_get_tile(
-                state.world_light_map,
-                pickup.entity.location,
-            ) > 0) {
-                const screen_pos = world_to_screen(state, pickup.entity.location);
-                w4.blit(
-                    switch (pickup.kind) {
-                        .health => &sprites.heart,
-                        .sword => &sprites.sword,
-                        .small_axe => &sprites.small_axe,
-                    },
-                    screen_pos.x,
-                    screen_pos.y,
-                    8,
-                    8,
-                    w4.BLIT_1BPP,
-                );
-            }
-        }
-    }
-
     { // draw monsters
         w4.DRAW_COLORS.* = 0x02;
 
@@ -755,6 +730,31 @@ pub fn update(global_state: anytype, pressed: u8) void {
                 const screen_pos = world_to_screen(state, fire_monster.entity.location);
                 w4.blit(
                     &sprites.fire_monster,
+                    screen_pos.x,
+                    screen_pos.y,
+                    8,
+                    8,
+                    w4.BLIT_1BPP,
+                );
+            }
+        }
+    }
+
+    { // draw pickups
+        w4.DRAW_COLORS.* = 0x40;
+
+        for (state.pickups) |*pickup| {
+            if (pickup.entity.health > 0 and world.map_get_tile(
+                state.world_light_map,
+                pickup.entity.location,
+            ) > 0) {
+                const screen_pos = world_to_screen(state, pickup.entity.location);
+                w4.blit(
+                    switch (pickup.kind) {
+                        .health => &sprites.heart,
+                        .sword => &sprites.sword,
+                        .small_axe => &sprites.small_axe,
+                    },
                     screen_pos.x,
                     screen_pos.y,
                     8,
