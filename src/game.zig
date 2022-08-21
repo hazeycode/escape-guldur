@@ -319,7 +319,7 @@ fn respond_to_move(state: *State) void {
 
                 if (dx == 0 or dy == 0) {
                     w4.trace("monster: orthogonal, step closer");
-                    if (dx != 0) possible_location.x += @divTrunc(dx, -dx) else if (dy != 0) possible_location.y += @divTrunc(dy, -dy);
+                    if (dx != 0) possible_location.x += @divTrunc(dx, dx) else if (dy != 0) possible_location.y += @divTrunc(dy, dy);
                 } else {
                     w4.trace("monster: on diagonal (roll dice)");
                     switch (rng.random().int(u1)) {
@@ -559,6 +559,7 @@ pub fn update(global_state: anytype, pressed: u8) void {
                     cancel_aim(state);
                 } else {
                     w4.trace("use item");
+                    try_move(state, state.action_targets[state.action_target]);
                 }
             } else if (pressed & w4.BUTTON_2 != 0) {
                 cancel_aim(state);
