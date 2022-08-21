@@ -44,8 +44,8 @@ const Player = struct {
     pub inline fn get_damage(self: Player) u4 {
         return switch (self.active_item) {
             .fists => 1,
-            .sword => 2,
-            .small_axe => 1,
+            .sword => 3,
+            .small_axe => 2,
         };
     }
 };
@@ -264,6 +264,7 @@ fn find_action_targets(state: *State) void {
             }
         },
         .small_axe => { // ranged attack
+
         },
     }
 }
@@ -572,10 +573,36 @@ pub fn update(global_state: anytype, pressed: u8) void {
             } else if (pressed & w4.BUTTON_2 != 0) {
                 cancel_aim(state);
             } else if (state.action_target_count > 0) {
-                if (pressed & w4.BUTTON_UP > 0 or pressed & w4.BUTTON_RIGHT > 0) {
-                    state.action_target = if (state.action_target == state.action_target_count - 1) 0 else state.action_target + 1;
-                } else if (pressed & w4.BUTTON_DOWN > 0 or pressed & w4.BUTTON_LEFT > 0) {
-                    state.action_target = if (state.action_target == 0) state.action_target_count - 1 else state.action_target - 1;
+                switch (state.player.active_item) {
+                    .fists, .sword => { // melee
+                        var i: usize = 0;
+                        while (i < state.action_target_count) : (i += 1) {
+                            if (state.action_targets[i].eql(state.player.entity.location.north())) {
+                                if (pressed & w4.BUTTON_UP > 0) {
+                                    state.action_target = @enumToInt(world.Direction.north);
+                                }
+                            } else if (state.action_targets[i].eql(state.player.entity.location.east())) {
+                                if (pressed & w4.BUTTON_RIGHT > 0) {
+                                    state.action_target = @enumToInt(world.Direction.east);
+                                }
+                            } else if (state.action_targets[i].eql(state.player.entity.location.south())) {
+                                if (pressed & w4.BUTTON_DOWN > 0) {
+                                    state.action_target = @enumToInt(world.Direction.south);
+                                }
+                            } else if (state.action_targets[i].eql(state.player.entity.location.west())) {
+                                if (pressed & w4.BUTTON_LEFT > 0) {
+                                    state.action_target = @enumToInt(world.Direction.west);
+                                }
+                            }
+                        }
+                    },
+                    .small_axe => { // ranged
+                        if (pressed & w4.BUTTON_UP > 0 or pressed & w4.BUTTON_RIGHT > 0) {
+                            state.action_target = if (state.action_target == state.action_target_count - 1) 0 else state.action_target + 1;
+                        } else if (pressed & w4.BUTTON_DOWN > 0 or pressed & w4.BUTTON_LEFT > 0) {
+                            state.action_target = if (state.action_target == 0) state.action_target_count - 1 else state.action_target - 1;
+                        }
+                    },
                 }
             }
         },
