@@ -582,6 +582,11 @@ pub fn update(global_state: anytype, pressed: u8) void {
 
     var state = &global_state.game_state;
 
+    if (state.level == levels.len - 1) {
+        global_state.screen = .win;
+        return;
+    }
+
     switch (state.turn_state) {
         .ready => {
             if (pressed & w4.BUTTON_1 != 0) {
