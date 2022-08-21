@@ -123,7 +123,7 @@ pub fn map_set_tile(world: anytype, location: Location, value: u4) void {
         @compileError("invalid world type");
     }
 
-    w4.trace("map_set_tile");
+    //w4.trace("map_set_tile");
 
     world[@intCast(usize, location.y)][@intCast(usize, location.x)] = value;
 }
@@ -134,7 +134,7 @@ pub fn map_get_tile(world: anytype, location: Location) u4 {
         @compileError("invalid world type");
     }
 
-    w4.trace("map_get_tile");
+    //w4.trace("map_get_tile");
 
     return world[@intCast(usize, location.y)][@intCast(usize, location.x)];
 }
@@ -145,7 +145,7 @@ pub fn map_get_tile_kind(world: anytype, location: Location) MapTileKind {
         @compileError("invalid world type");
     }
 
-    w4.trace("map_get_tile_kind");
+    //w4.trace("map_get_tile_kind");
 
     return @intToEnum(
         MapTileKind,
