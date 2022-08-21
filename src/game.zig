@@ -215,6 +215,8 @@ fn try_move(state: *State, location: world.Location) void {
                     }
                     pickup.entity.health = 0;
 
+                    sfx.pickup();
+
                     commit_move(state);
                     break :find_move;
                 }
