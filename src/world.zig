@@ -28,16 +28,16 @@ pub const MapTileKind = enum(u4) {
 pub const Direction = enum { north, east, south, west };
 
 pub const Location = struct {
-    x: i16,
-    y: i16,
+    x: u16,
+    y: u16,
 
     pub fn eql(self: @This(), other: @This()) bool {
         return self.x == other.x and self.y == other.y;
     }
 
     pub fn manhattan_to(self: Location, other: Location) u8 {
-        var dx = @intCast(i16, other.x) - @intCast(i16, self.x);
-        var dy = @intCast(i16, other.y) - @intCast(i16, self.y);
+        var dx = @intCast(i32, other.x) - @intCast(i32, self.x);
+        var dy = @intCast(i32, other.y) - @intCast(i32, self.y);
 
         if (dx < 0) dx = -dx;
         if (dy < 0) dy = -dy;
@@ -118,26 +118,34 @@ pub fn check_line_of_sight(
 
 pub fn map_set_tile(world: anytype, location: Location, value: u4) void {
     const world_type_info = @typeInfo(@TypeOf(world));
-    std.debug.assert(world_type_info == .Pointer);
     const child_type_info = @typeInfo(world_type_info.Pointer.child);
-    std.debug.assert(child_type_info == .Array and
-        @typeInfo(child_type_info.Array.child) == .Array);
+    if (child_type_info != .Array or @typeInfo(child_type_info.Array.child) != .Array) {
+        @compileError("invalid world type");
+    }
+
+    w4.trace("map_set_tile");
 
     world[@intCast(usize, location.y)][@intCast(usize, location.x)] = value;
 }
 
 pub fn map_get_tile(world: anytype, location: Location) u4 {
     const world_type_info = @typeInfo(@TypeOf(world));
-    std.debug.assert(world_type_info == .Array and
-        @typeInfo(world_type_info.Array.child) == .Array);
+    if (world_type_info != .Array or @typeInfo(world_type_info.Array.child) != .Array) {
+        @compileError("invalid world type");
+    }
+
+    w4.trace("map_get_tile");
 
     return world[@intCast(usize, location.y)][@intCast(usize, location.x)];
 }
 
 pub fn map_get_tile_kind(world: anytype, location: Location) MapTileKind {
     const world_type_info = @typeInfo(@TypeOf(world));
-    std.debug.assert(world_type_info == .Array and
-        @typeInfo(world_type_info.Array.child) == .Array);
+    if (world_type_info != .Array or @typeInfo(world_type_info.Array.child) != .Array) {
+        @compileError("invalid world type");
+    }
+
+    w4.trace("map_get_tile_kind");
 
     return @intToEnum(
         MapTileKind,

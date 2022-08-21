@@ -170,8 +170,8 @@ fn world_to_screen(state: *State, location: world.Location) ScreenPosition {
         cam_offset = state.action_targets[state.action_target];
     }
     return .{
-        .x = (location.x - cam_offset.x) * 8 + w4.SCREEN_SIZE / 2,
-        .y = (location.y - cam_offset.y) * 8 + w4.SCREEN_SIZE / 2,
+        .x = (@intCast(i32, location.x) - cam_offset.x) * 8 + w4.SCREEN_SIZE / 2,
+        .y = (@intCast(i32, location.y) - cam_offset.y) * 8 + w4.SCREEN_SIZE / 2,
     };
 }
 
@@ -305,8 +305,8 @@ fn respond_to_move(state: *State) void {
             w4.trace("monster: begin move...");
             defer w4.trace("monster: move complete");
 
-            var dx = @intCast(i16, state.player.entity.location.x) - @intCast(i16, monster.entity.location.x);
-            var dy = @intCast(i16, state.player.entity.location.y) - @intCast(i16, monster.entity.location.y);
+            var dx = @intCast(i32, state.player.entity.location.x) - @intCast(i32, monster.entity.location.x);
+            var dy = @intCast(i32, state.player.entity.location.y) - @intCast(i32, monster.entity.location.y);
             const manhattan_dist = @intCast(u8, (if (dx < 0) -dx else dx) + if (dy < 0) -dy else dy);
 
             if (manhattan_dist == 1) {
@@ -321,12 +321,16 @@ fn respond_to_move(state: *State) void {
 
                 if (dx == 0 or dy == 0) {
                     w4.trace("monster: orthogonal, step closer");
-                    if (dx != 0) possible_location.x += @divTrunc(dx, dx) else if (dy != 0) possible_location.y += @divTrunc(dy, dy);
+                    if (dx != 0) {
+                        possible_location.x += @intCast(u8, @divTrunc(dx, dx));
+                    } else if (dy != 0) {
+                        possible_location.y += @intCast(u8, @divTrunc(dy, dy));
+                    }
                 } else {
                     w4.trace("monster: on diagonal (roll dice)");
                     switch (rng.random().int(u1)) {
-                        0 => possible_location.x += @divTrunc(dx, dx),
-                        1 => possible_location.y += @divTrunc(dy, dy),
+                        0 => possible_location.x += @intCast(u8, @divTrunc(dx, dx)),
+                        1 => possible_location.y += @intCast(u8, @divTrunc(dy, dy)),
                     }
                 }
 
@@ -402,26 +406,33 @@ fn respond_to_move(state: *State) void {
 
 /// Returns true if the location is not occupied by a blocking tile or blocking entity
 fn test_walkable(state: *State, location: world.Location) bool {
-    w4.trace("test location walkable");
+    w4.trace("test location walkable...");
 
     const kind = world.map_get_tile_kind(state.world, location);
-    if (kind == .wall or kind == .locked_door) {
-        return false;
-    }
+
+    var walkable = switch (kind) {
+        .wall, .locked_door => false,
+        else => true,
+    };
+
     if (state.player.entity.health > 0 and state.player.entity.location.eql(location)) {
-        return false;
+        walkable = false;
     }
+
     for (state.monsters) |*other| {
         if (other.entity.health > 0 and other.entity.location.eql(location)) {
-            return false;
+            walkable = false;
         }
     }
     for (state.fire_monsters) |*other| {
         if (other.entity.health > 0 and other.entity.location.eql(location)) {
-            return false;
+            walkable = false;
         }
     }
-    return true;
+
+    if (walkable) w4.trace("is walkable") else w4.trace("is NOT walkable");
+
+    return walkable;
 }
 
 fn spawn_fire(state: *State, path: world.Path) void {
