@@ -151,14 +151,18 @@ pub const State = struct {
     }
 
     fn spawn_pickup(self: *@This(), location: world.Location, kind: anytype) void {
-        self.pickups[self.pickup_count] = .{
-            .entity = .{
-                .location = location,
-                .health = 1,
-            },
-            .kind = kind,
-        };
-        self.pickup_count += 1;
+        w4.trace("spawn pickup");
+
+        for (self.pickups) |*pickup| {
+            if (pickup.entity.health == 0) {
+                pickup.entity = .{
+                    .location = location,
+                    .health = 1,
+                };
+                pickup.kind = kind;
+                return;
+            }
+        }
     }
 };
 
@@ -652,13 +656,8 @@ pub fn update(global_state: anytype, pressed: u8) void {
                     switch (state.player.active_item) {
                         .fists, .sword => try_move(state, target_location),
                         .small_axe => if (try_hit_enemy(state, target_location)) {
-                            switch (state.player.active_item) {
-                                .small_axe => {
-                                    state.player.remove_item(.small_axe);
-                                    state.spawn_pickup(target_location, .small_axe);
-                                },
-                                else => {},
-                            }
+                            state.player.remove_item(.small_axe);
+                            state.spawn_pickup(target_location, .small_axe);
                         },
                     }
                 }
