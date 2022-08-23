@@ -5,6 +5,7 @@ const std = @import("std");
 const sqrt = std.math.sqrt;
 var rng = std.rand.DefaultPrng.init(42);
 
+const gfx = @import("gfx.zig");
 const sfx = @import("sfx.zig");
 const sprites = @import("sprites.zig");
 const world = @import("world.zig");
@@ -65,11 +66,12 @@ pub const State = struct {
     turn_state: enum { ready, aim, response, complete } = .ready,
     // turn: u8 = 0,
     level: u8 = 0,
+    camera_location: world.Location,
     action_target: u8 = 0,
     action_targets: [16]world.Location,
     action_target_count: u8 = 0,
-    world: WorldMap,
-    world_light_map: WorldMap,
+    world_map: WorldMap,
+    world_vis_map: WorldMap,
     player: Player,
     monsters: [16]Enemy,
     fire_monsters: [8]Enemy,
@@ -97,7 +99,7 @@ pub const State = struct {
         self.action_target_count = 0;
 
         self.level = level;
-        self.world = levels[level];
+        self.world_map = levels[level];
 
         for (self.monsters) |*monster| monster.entity.health = 0;
         self.monster_count = 0;
@@ -115,7 +117,7 @@ pub const State = struct {
         while (location.x < world.size_x) : (location.x += 1) {
             defer location.y = 0;
             while (location.y < world.size_y) : (location.y += 1) {
-                switch (world.map_get_tile_kind(self.world, location)) {
+                switch (world.map_get_tile_kind(self.world_map, location)) {
                     .player_spawn => {
                         self.player.entity.location = location;
                     },
@@ -166,21 +168,8 @@ pub const State = struct {
     }
 };
 
-const ScreenPosition = struct { x: i32, y: i32 };
-
-fn world_to_screen(state: *State, location: world.Location) ScreenPosition {
-    var cam_offset = state.player.entity.location;
-    if (state.turn_state == .aim and state.action_target_count > 0) {
-        cam_offset = state.action_targets[state.action_target];
-    }
-    return .{
-        .x = (location.x - cam_offset.x) * 8 + w4.SCREEN_SIZE / 2,
-        .y = (location.y - cam_offset.y) * 8 + w4.SCREEN_SIZE / 2,
-    };
-}
-
 fn try_move(state: *State, location: world.Location) void {
-    switch (world.map_get_tile_kind(state.world, location)) {
+    switch (world.map_get_tile_kind(state.world_map, location)) {
         .wall => {
             // you shall not pass!
             return;
@@ -284,7 +273,7 @@ fn find_action_targets(state: *State) void {
                 state.player.entity.location.south(),
                 state.player.entity.location.west(),
             }) |location| {
-                if (world.map_get_tile_kind(state.world, location) != .wall) {
+                if (world.map_get_tile_kind(state.world_map, location) != .wall) {
                     for (state.monsters) |*monster| {
                         if (monster.entity.health > 0 and monster.entity.location.eql(location)) {
                             state.action_targets[state.action_target_count] = monster.entity.location;
@@ -326,7 +315,7 @@ fn test_can_ranged_attack(state: *State, location: world.Location) bool {
     if (d < 11) {
         const res = world.check_line_of_sight(
             WorldMap,
-            state.world,
+            state.world_map,
             state.player.entity.location,
             location,
         );
@@ -354,7 +343,7 @@ fn respond_to_move(state: *State) void {
         state.turn_state = .complete;
     }
 
-    if (world.map_get_tile_kind(state.world, state.player.entity.location) == .door) {
+    if (world.map_get_tile_kind(state.world_map, state.player.entity.location) == .door) {
         state.level += 1;
         if (state.level < levels.len) {
             w4.trace("load next level");
@@ -410,7 +399,7 @@ fn respond_to_move(state: *State) void {
             } else if (manhattan_dist < 10) {
                 const res = world.check_line_of_sight(
                     WorldMap,
-                    state.world,
+                    state.world_map,
                     monster.entity.location,
                     state.player.entity.location,
                 );
@@ -454,7 +443,7 @@ fn respond_to_move(state: *State) void {
             if (d > 3 and d < 20) {
                 const res = world.check_line_of_sight(
                     WorldMap,
-                    state.world,
+                    state.world_map,
                     fire_monster.entity.location,
                     state.player.entity.location,
                 );
@@ -478,7 +467,7 @@ fn respond_to_move(state: *State) void {
 fn test_walkable(state: *State, location: world.Location) bool {
     w4.trace("test location walkable...");
 
-    const kind = world.map_get_tile_kind(state.world, location);
+    const kind = world.map_get_tile_kind(state.world_map, location);
 
     var walkable = switch (kind) {
         .wall, .locked_door => false,
@@ -542,7 +531,7 @@ fn update_fire(state: *State, fire: *Enemy) void {
 
         w4.trace("fire walk path");
 
-        if (world.map_get_tile_kind(state.world, fire.entity.location) != .wall) {
+        if (world.map_get_tile_kind(state.world_map, fire.entity.location) != .wall) {
             if (fire.entity.location.eql(state.player.entity.location)) {
                 w4.trace("fire hit player!");
                 sfx.receive_damage();
@@ -586,22 +575,22 @@ fn update_world_lightmap(state: *State) void {
     while (location.x < world.size_x) : (location.x += 1) {
         defer location.y = 0;
         while (location.y < world.size_y) : (location.y += 1) {
-            if (world.map_get_tile_kind(state.world, location) == .door) {
-                world.map_set_tile(&state.world_light_map, location, 1);
+            if (world.map_get_tile_kind(state.world_map, location) == .door) {
+                world.map_set_tile(&state.world_vis_map, location, 1);
                 continue;
             }
 
             if (location.manhattan_to(state.player.entity.location) > 13) {
-                world.map_set_tile(&state.world_light_map, location, @as(u8, 0));
+                world.map_set_tile(&state.world_vis_map, location, @as(u8, 0));
             } else {
                 const res = world.check_line_of_sight(
                     WorldMap,
-                    state.world,
+                    state.world_map,
                     location,
                     state.player.entity.location,
                 );
                 world.map_set_tile(
-                    &state.world_light_map,
+                    &state.world_vis_map,
                     location,
                     @as(u4, if (res.hit_target) 1 else 0),
                 );
@@ -685,195 +674,18 @@ pub fn update(global_state: anytype, pressed: u8) void {
         },
     }
 
-    { // draw world
-
-        var location: world.Location = .{ .x = 0, .y = 0 };
-        while (location.x < world.size_x) : (location.x += 1) {
-            defer location.y = 0;
-            while (location.y < world.size_y) : (location.y += 1) {
-                if (world.map_get_tile(state.world_light_map, location) > 0) {
-                    switch (world.map_get_tile_kind(state.world, location)) {
-                        .wall, .locked_door => {},
-                        .door => {
-                            w4.DRAW_COLORS.* = 0x03;
-                            const screen_pos = world_to_screen(state, location);
-                            w4.blit(
-                                &sprites.door,
-                                screen_pos.x,
-                                screen_pos.y,
-                                8,
-                                8,
-                                w4.BLIT_1BPP,
-                            );
-                        },
-                        else => {
-                            w4.DRAW_COLORS.* = 0x43;
-                            const screen_pos = world_to_screen(state, location);
-                            w4.blit(
-                                &sprites.floor,
-                                screen_pos.x,
-                                screen_pos.y,
-                                8,
-                                8,
-                                w4.BLIT_1BPP,
-                            );
-                        },
-                    }
-                }
-            }
-        }
+    // update camera location
+    state.camera_location = state.player.entity.location;
+    if (state.turn_state == .aim and state.action_target_count > 0) {
+        state.camera_location = state.action_targets[state.action_target];
     }
 
-    { // draw monsters
-        w4.DRAW_COLORS.* = 0x02;
-
-        for (state.monsters) |*monster| {
-            if (monster.entity.health > 0 and
-                world.map_get_tile(state.world_light_map, monster.entity.location) > 0)
-            {
-                const screen_pos = world_to_screen(state, monster.entity.location);
-                w4.blit(
-                    &sprites.monster,
-                    screen_pos.x,
-                    screen_pos.y,
-                    8,
-                    8,
-                    w4.BLIT_1BPP,
-                );
-            }
-        }
-        for (state.fire_monsters) |*fire_monster| {
-            if (fire_monster.entity.health > 0 and
-                world.map_get_tile(state.world_light_map, fire_monster.entity.location) > 0)
-            {
-                const screen_pos = world_to_screen(state, fire_monster.entity.location);
-                w4.blit(
-                    &sprites.fire_monster,
-                    screen_pos.x,
-                    screen_pos.y,
-                    8,
-                    8,
-                    w4.BLIT_1BPP,
-                );
-            }
-        }
-    }
-
-    { // draw pickups
-        w4.DRAW_COLORS.* = 0x40;
-
-        for (state.pickups) |*pickup| {
-            if (pickup.entity.health > 0 and world.map_get_tile(
-                state.world_light_map,
-                pickup.entity.location,
-            ) > 0) {
-                const screen_pos = world_to_screen(state, pickup.entity.location);
-                w4.blit(
-                    switch (pickup.kind) {
-                        .health => &sprites.heart,
-                        .sword => &sprites.sword,
-                        .small_axe => &sprites.small_axe,
-                    },
-                    screen_pos.x,
-                    screen_pos.y,
-                    8,
-                    8,
-                    w4.BLIT_1BPP,
-                );
-            }
-        }
-    }
-
-    { // draw player
-        w4.DRAW_COLORS.* = 0x20;
-
-        const screen_pos = world_to_screen(state, state.player.entity.location);
-        w4.blit(
-            &sprites.player,
-            screen_pos.x,
-            screen_pos.y,
-            8,
-            8,
-            w4.BLIT_1BPP,
-        );
-    }
-
-    { // draw fire
-        w4.DRAW_COLORS.* = 0x40;
-
-        for (state.fire) |*fire| {
-            if (fire.entity.health > 0 and world.map_get_tile(
-                state.world_light_map,
-                fire.entity.location,
-            ) > 0) {
-                const screen_pos = world_to_screen(state, fire.entity.location);
-                w4.blit(
-                    &sprites.fire,
-                    screen_pos.x,
-                    screen_pos.y,
-                    8,
-                    8,
-                    w4.BLIT_1BPP,
-                );
-            }
-        }
-    }
-
-    { // draw HUD
-        if (state.turn_state == .aim) {
-            w4.DRAW_COLORS.* = 0x04;
-
-            w4.text(if (state.action_target_count == 0) "NO TARGETS" else "AIM", 1, w4.SCREEN_SIZE - (8 + 1) * 2);
-
-            var i: usize = 0;
-            while (i < state.action_target_count) : (i += 1) {
-                w4.DRAW_COLORS.* = 0x40;
-                const screen_pos = world_to_screen(state, state.action_targets[i]);
-                w4.blit(
-                    if (i == state.action_target) &sprites.tile_reticule_active else &sprites.tile_reticule_inactive,
-                    screen_pos.x,
-                    screen_pos.y,
-                    8,
-                    8,
-                    w4.BLIT_1BPP,
-                );
-            }
-        }
-
-        { // draw health bar
-            w4.DRAW_COLORS.* = 0x40;
-
-            const piece_width: u16 = 8;
-            const piece_height: u16 = 8;
-            if (state.player.entity.health > 0) {
-                const width: u16 = @bitCast(u8, state.player.entity.health) * piece_width;
-                const y = @intCast(i32, w4.SCREEN_SIZE) - piece_height - 1;
-                var x: i32 = @intCast(i32, w4.SCREEN_SIZE) - width - 1;
-                var i: usize = 0;
-                while (i < state.player.entity.health) : (i += 1) {
-                    w4.blit(
-                        &sprites.heart,
-                        x,
-                        y,
-                        piece_width,
-                        piece_height,
-                        w4.BLIT_1BPP,
-                    );
-                    x += piece_width;
-                }
-            }
-        }
-
-        { // draw active item
-            w4.DRAW_COLORS.* = 0x04;
-            const str = switch (state.player.active_item) {
-                .fists => "FISTS",
-                .sword => "SWORD",
-                .small_axe => "THROWING AXE",
-            };
-            w4.text(str, 1, w4.SCREEN_SIZE - 8 - 1);
-        }
-    }
+    gfx.draw_world(state);
+    gfx.draw_enemies(state);
+    gfx.draw_pickups(state);
+    gfx.draw_player(state);
+    gfx.draw_fire(state);
+    gfx.draw_hud(state);
 }
 
 const levels: [4]WorldMap = .{
