@@ -133,19 +133,30 @@ pub fn draw_fire(state: anytype) void { // draw fire
     w4.DRAW_COLORS.* = 0x40;
 
     for (state.fire) |*fire| {
-        if (fire.entity.health > 0 and world.map_get_tile(
-            state.world_vis_map,
-            fire.entity.location,
-        ) > 0) {
+        if (fire.entity.health > 0 and world.map_get_tile(state.world_vis_map, fire.entity.location) > 0) {
             const screen_pos = world_to_screen(fire.entity.location, state.camera_location);
             w4.blit(
-                &sprites.fire,
+                &sprites.fire_big,
                 screen_pos.x,
                 screen_pos.y,
                 8,
                 8,
                 w4.BLIT_1BPP,
             );
+        }
+        if (fire.path.length > 1) {
+            const location = fire.path.locations[1];
+            if (world.map_get_tile(state.world_vis_map, location) > 0) {
+                const screen_pos = world_to_screen(location, state.camera_location);
+                w4.blit(
+                    &sprites.fire_small,
+                    screen_pos.x,
+                    screen_pos.y,
+                    8,
+                    8,
+                    w4.BLIT_1BPP,
+                );
+            }
         }
     }
 }

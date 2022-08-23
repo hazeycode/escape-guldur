@@ -53,7 +53,18 @@ pub const fire_monster = [8]u8{
     0b11010111,
 };
 
-pub const fire = [8]u8{
+pub const fire_small = [8]u8{
+    0b00000000,
+    0b00000100,
+    0b01000000,
+    0b00001000,
+    0b00011000,
+    0b00110100,
+    0b01111000,
+    0b00000000,
+};
+
+pub const fire_big = [8]u8{
     0b00100000,
     0b00001000,
     0b00011000,
