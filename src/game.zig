@@ -513,8 +513,8 @@ fn spawn_fire(state: *State, path: world.Path) void {
         new_fire.path.length = if (path.length <= 1) 0 else path.length - 1;
         if (new_fire.path.length > 0) {
             std.mem.copy(world.Location, new_fire.path.locations[0..], path.locations[1..]);
-            state.fire[state.fire_count] = new_fire;
         }
+        state.fire[state.fire_count] = new_fire;
         state.fire_count += 1;
     }
 }
@@ -525,11 +525,13 @@ fn update_fire(state: *State, fire: *Enemy) void {
     if (fire.path.length > 1) {
         std.mem.copy(world.Location, fire.path.locations[0..], fire.path.locations[1..]);
     }
+
+    fire.path.length -= 1;
+
     if (fire.path.length > 0) {
         w4.trace("fire walk path");
 
         fire.entity.location = fire.path.locations[0];
-        fire.path.length -= 1;
 
         if (world.map_get_tile_kind(state.world_map, fire.entity.location) != .wall) {
             if (fire.entity.location.eql(state.player.entity.location)) {
