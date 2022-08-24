@@ -1,17 +1,19 @@
 const w4 = @import("wasm4.zig");
 const w4_util = @import("wasm4_util.zig");
 
-const menu = @import("menu.zig");
-const game = @import("game.zig");
+const gfx = @import("gfx.zig");
+const sfx = @import("sfx.zig");
+const data = @import("data.zig");
 
-const Screen = enum { menu, game, dead, win };
+const util = struct {
+    pub inline fn trace(str: []const u8) void {
+        w4.trace(str);
+    }
+};
 
-var state = struct {
-    screen: Screen = .menu,
-    menu_state: menu.State = .main,
-    game_state: game.State = undefined,
-}{};
+const game = @import("game.zig").Game(gfx, sfx, util, data);
 
+var state = game.State{};
 var prev_gamepad: u8 = 0;
 
 export fn start() void {
@@ -28,34 +30,26 @@ export fn update() void {
     const pressed = gamepad & (gamepad ^ prev_gamepad);
     prev_gamepad = gamepad;
 
-    switch (state.screen) {
-        .menu => menu.update(&state, pressed),
-        .game => game.update(&state, pressed),
-        .dead => simple_screen("YOU DIED", pressed, .menu, null),
-        .win => simple_screen("YOU ESCAPED", pressed, .menu, null),
-    }
-}
+    const input = struct {
+        pressed: packed struct {
+            left: u1,
+            right: u1,
+            up: u1,
+            down: u1,
+            action_1: u1,
+            action_2: u1,
+            _: u2 = 0,
+        },
+    }{
+        .pressed = .{
+            .left = if (pressed & w4.BUTTON_LEFT > 0) 1 else 0,
+            .right = if (pressed & w4.BUTTON_RIGHT > 0) 1 else 0,
+            .up = if (pressed & w4.BUTTON_UP > 0) 1 else 0,
+            .down = if (pressed & w4.BUTTON_DOWN > 0) 1 else 0,
+            .action_1 = if (pressed & w4.BUTTON_1 > 0) 1 else 0,
+            .action_2 = if (pressed & w4.BUTTON_2 > 0) 1 else 0,
+        },
+    };
 
-fn simple_screen(
-    text_str: []const u8,
-    pressed: u8,
-    advance_screen: Screen,
-    maybe_retreat_screen: ?Screen,
-) void {
-    w4.DRAW_COLORS.* = 0x04;
-
-    w4_util.text_centered(text_str, w4.SCREEN_SIZE / 2);
-
-    if (pressed & w4.BUTTON_1 != 0) {
-        w4.tone(440 | (880 << 16), 2 | (4 << 8), 80, w4.TONE_PULSE1);
-        state.screen = advance_screen;
-        return;
-    }
-
-    if (maybe_retreat_screen) |retreat_screen| {
-        if (pressed & w4.BUTTON_2 != 0) {
-            w4.tone(440 | (220 << 16), 2 | (4 << 8), 80, w4.TONE_PULSE1);
-            state.screen = retreat_screen;
-        }
-    }
+    game.update(&state, input);
 }

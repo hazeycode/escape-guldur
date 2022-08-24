@@ -1,49 +1,50 @@
-const w4 = @import("wasm4.zig");
-const w4_util = @import("wasm4_util.zig");
+pub fn Menus(gfx: anytype, sfx: anytype) type {
+    return struct {
+        pub fn title(gfx: anytype, sfx: anytype) void {
+            gfx.draw_title_menu();
 
-const sfx = @import("sfx.zig");
-
-pub const State = enum { main, controls };
-
-pub fn update(global_state: anytype, pressed: u8) void {
-    if (@typeInfo(@TypeOf(global_state)) != .Pointer) {
-        @compileError("global_state type must be a pointer");
-    }
-
-    w4.DRAW_COLORS.* = 0x04;
-
-    switch (global_state.menu_state) {
-        .main => {
-            w4_util.text_centered("Escape Guldur", @divTrunc(w4.SCREEN_SIZE, 3));
-
-            w4.text("\x80 START", 16, w4.SCREEN_SIZE - (8 + 4) * 2);
-
-            w4.text("\x81 CONTROLS", 16, w4.SCREEN_SIZE - (8 + 4));
-
-            if (pressed & w4.BUTTON_1 != 0) {
+            if (input.pressed.action_1 > 0) {
                 sfx.walk();
                 global_state.screen = .game;
                 global_state.game_state.reset();
                 global_state.game_state.load_level(0);
-            } else if (pressed & w4.BUTTON_2 != 0) {
+            } else if (input.pressed.action_2 > 0) {
                 sfx.walk();
                 global_state.menu_state = .controls;
             }
-        },
-        .controls => {
-            w4_util.text_centered("CONTROLS", 2);
+        }
 
-            w4.text("\x84\x85\x86\x87 MOVE /", 10, 40 + (8 + 1) * 0);
-            w4.text("     CHANGE TARGET", 10, 40 + (8 + 1) * 1);
-            w4.text("\x80 AIM ITEM /", 10, 40 + (8 + 1) * 4);
-            w4.text("  USE ITEM", 10, 40 + (8 + 1) * 5);
-            w4.text("\x81 CYCLE ITEM /", 10, 40 + (8 + 1) * 8);
-            w4.text("  CANCEL AIM", 10, 40 + (8 + 1) * 9);
+        pub fn controls(gfx: anytype, sfx) void {
+            gfx.draw_controls();
 
-            if (pressed & (w4.BUTTON_1 | w4.BUTTON_2) > 0) {
+            if (input.pressed.action_1 + input.pressed.action_2 > 0) {
                 sfx.walk();
                 global_state.menu_state = .main;
             }
-        },
-    }
+        }
+
+        pub fn simple_screen(
+            text_str: []const u8,
+            pressed: u8,
+            advance_screen: Screen,
+            maybe_retreat_screen: ?Screen,
+        ) void {
+            w4.DRAW_COLORS.* = 0x04;
+
+            w4_util.text_centered(text_str, w4.SCREEN_SIZE / 2);
+
+            if (pressed & w4.BUTTON_1 != 0) {
+                w4.tone(440 | (880 << 16), 2 | (4 << 8), 80, w4.TONE_PULSE1);
+                state.screen = advance_screen;
+                return;
+            }
+
+            if (maybe_retreat_screen) |retreat_screen| {
+                if (pressed & w4.BUTTON_2 != 0) {
+                    w4.tone(440 | (220 << 16), 2 | (4 << 8), 80, w4.TONE_PULSE1);
+                    state.screen = retreat_screen;
+                }
+            }
+        }
+    };
 }

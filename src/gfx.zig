@@ -2,7 +2,6 @@ const w4 = @import("wasm4.zig");
 const w4_util = @import("wasm4_util.zig");
 
 const world = @import("world.zig");
-const sprites = @import("sprites.zig");
 
 const tile_px_width = 8;
 const tile_px_height = 8;
@@ -16,7 +15,7 @@ fn world_to_screen(location: world.Location, camera_location: world.Location) Sc
     };
 }
 
-pub fn draw_world(state: anytype) void {
+pub fn draw_world(state: anytype, data: anytype) void {
     var location: world.Location = .{ .x = 0, .y = 0 };
     while (location.x < world.size_x) : (location.x += 1) {
         defer location.y = 0;
@@ -28,7 +27,7 @@ pub fn draw_world(state: anytype) void {
                         w4.DRAW_COLORS.* = 0x03;
                         const screen_pos = world_to_screen(location, state.camera_location);
                         w4.blit(
-                            &sprites.door,
+                            &data.Sprites.door,
                             screen_pos.x,
                             screen_pos.y,
                             tile_px_width,
@@ -40,7 +39,7 @@ pub fn draw_world(state: anytype) void {
                         w4.DRAW_COLORS.* = 0x43;
                         const screen_pos = world_to_screen(location, state.camera_location);
                         w4.blit(
-                            &sprites.floor,
+                            &data.Sprites.floor,
                             screen_pos.x,
                             screen_pos.y,
                             tile_px_width,
@@ -54,7 +53,7 @@ pub fn draw_world(state: anytype) void {
     }
 }
 
-pub fn draw_enemies(state: anytype) void {
+pub fn draw_enemies(state: anytype, data: anytype) void {
     w4.DRAW_COLORS.* = 0x02;
 
     for (state.monsters) |*monster| {
@@ -63,7 +62,7 @@ pub fn draw_enemies(state: anytype) void {
         {
             const screen_pos = world_to_screen(monster.entity.location, state.camera_location);
             w4.blit(
-                &sprites.monster,
+                &data.Sprites.monster,
                 screen_pos.x,
                 screen_pos.y,
                 8,
@@ -79,7 +78,7 @@ pub fn draw_enemies(state: anytype) void {
         {
             const screen_pos = world_to_screen(fire_monster.entity.location, state.camera_location);
             w4.blit(
-                &sprites.fire_monster,
+                &data.Sprites.fire_monster,
                 screen_pos.x,
                 screen_pos.y,
                 8,
@@ -90,7 +89,7 @@ pub fn draw_enemies(state: anytype) void {
     }
 }
 
-pub fn draw_pickups(state: anytype) void {
+pub fn draw_pickups(state: anytype, data: anytype) void {
     w4.DRAW_COLORS.* = 0x40;
 
     for (state.pickups) |*pickup| {
@@ -101,9 +100,9 @@ pub fn draw_pickups(state: anytype) void {
             const screen_pos = world_to_screen(pickup.entity.location, state.camera_location);
             w4.blit(
                 switch (pickup.kind) {
-                    .health => &sprites.heart,
-                    .sword => &sprites.sword,
-                    .small_axe => &sprites.small_axe,
+                    .health => &data.Sprites.heart,
+                    .sword => &data.Sprites.sword,
+                    .small_axe => &data.Sprites.small_axe,
                 },
                 screen_pos.x,
                 screen_pos.y,
@@ -115,12 +114,12 @@ pub fn draw_pickups(state: anytype) void {
     }
 }
 
-pub fn draw_player(state: anytype) void {
+pub fn draw_player(state: anytype, data: anytype) void {
     w4.DRAW_COLORS.* = 0x20;
 
     const screen_pos = world_to_screen(state.player.entity.location, state.camera_location);
     w4.blit(
-        &sprites.player,
+        &data.Sprites.player,
         screen_pos.x,
         screen_pos.y,
         8,
@@ -129,14 +128,14 @@ pub fn draw_player(state: anytype) void {
     );
 }
 
-pub fn draw_fire(state: anytype) void { // draw fire
+pub fn draw_fire(state: anytype, data: anytype) void { // draw fire
     w4.DRAW_COLORS.* = 0x40;
 
     for (state.fire) |*fire| {
         if (fire.entity.health > 0 and world.map_get_tile(state.world_vis_map, fire.entity.location) > 0) {
             const screen_pos = world_to_screen(fire.entity.location, state.camera_location);
             w4.blit(
-                &sprites.fire_big,
+                &data.Sprites.fire_big,
                 screen_pos.x,
                 screen_pos.y,
                 8,
@@ -149,7 +148,7 @@ pub fn draw_fire(state: anytype) void { // draw fire
             if (world.map_get_tile(state.world_vis_map, location) > 0) {
                 const screen_pos = world_to_screen(location, state.camera_location);
                 w4.blit(
-                    &sprites.fire_small,
+                    &data.Sprites.fire_small,
                     screen_pos.x,
                     screen_pos.y,
                     8,
@@ -161,7 +160,7 @@ pub fn draw_fire(state: anytype) void { // draw fire
     }
 }
 
-pub fn draw_hud(state: anytype) void {
+pub fn draw_hud(state: anytype, data: anytype) void {
     if (state.turn_state == .aim) {
         w4.DRAW_COLORS.* = 0x04;
 
@@ -172,7 +171,7 @@ pub fn draw_hud(state: anytype) void {
             w4.DRAW_COLORS.* = 0x40;
             const screen_pos = world_to_screen(state.action_targets[i], state.camera_location);
             w4.blit(
-                if (i == state.action_target) &sprites.tile_reticule_active else &sprites.tile_reticule_inactive,
+                if (i == state.action_target) &data.Sprites.tile_reticule_active else &data.Sprites.tile_reticule_inactive,
                 screen_pos.x,
                 screen_pos.y,
                 8,
@@ -194,7 +193,7 @@ pub fn draw_hud(state: anytype) void {
             var i: usize = 0;
             while (i < state.player.entity.health) : (i += 1) {
                 w4.blit(
-                    &sprites.heart,
+                    &data.Sprites.heart,
                     x,
                     y,
                     piece_width,
@@ -215,4 +214,27 @@ pub fn draw_hud(state: anytype) void {
         };
         w4.text(str, 1, w4.SCREEN_SIZE - 8 - 1);
     }
+}
+
+pub fn draw_text_centred(text_str: []const u8) void {
+    w4.DRAW_COLORS.* = 0x04;
+    w4_util.text_centered(text_str, w4.SCREEN_SIZE / 2);
+}
+
+pub fn draw_title_menu() void {
+    w4.DRAW_COLORS.* = 0x04;
+    w4_util.text_centered("Escape Guldur", @divTrunc(w4.SCREEN_SIZE, 3));
+    w4.text("\x80 START", 16, w4.SCREEN_SIZE - (8 + 4) * 2);
+    w4.text("\x81 CONTROLS", 16, w4.SCREEN_SIZE - (8 + 4));
+}
+
+pub fn draw_controls() void {
+    w4.DRAW_COLORS.* = 0x04;
+    w4_util.text_centered("CONTROLS", 2);
+    w4.text("\x84\x85\x86\x87 MOVE /", 10, 40 + (8 + 1) * 0);
+    w4.text("     CHANGE TARGET", 10, 40 + (8 + 1) * 1);
+    w4.text("\x80 AIM ITEM /", 10, 40 + (8 + 1) * 4);
+    w4.text("  USE ITEM", 10, 40 + (8 + 1) * 5);
+    w4.text("\x81 CYCLE ITEM /", 10, 40 + (8 + 1) * 8);
+    w4.text("  CANCEL AIM", 10, 40 + (8 + 1) * 9);
 }
