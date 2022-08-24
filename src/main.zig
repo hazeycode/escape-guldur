@@ -9,6 +9,10 @@ const util = struct {
     pub inline fn trace(str: []const u8) void {
         w4.trace(str);
     }
+
+    pub inline fn tracef(template: [*:0]const u8, args: anytype) void {
+        w4.tracef(template, args);
+    }
 };
 
 const game = @import("game.zig").Game(gfx, sfx, util, data);

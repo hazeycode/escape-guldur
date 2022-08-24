@@ -61,8 +61,10 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
         };
 
         pub const State = struct {
+            // timer: std.time.Timer = undefined,
+            game_elapsed_ns: u64 = 0,
             turn_state: enum { ready, aim, response, complete } = .ready,
-            // turn: u8 = 0,
+            turn: u8 = 0,
             level: u8 = 0,
             camera_location: world.Location = undefined,
             action_target: u8 = 0,
@@ -82,8 +84,9 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
 
             pub fn reset(self: *@This()) void {
                 util.trace("reset");
+                // self.timer = std.time.Timer.start() catch @panic("Failed to start timer");
                 self.turn_state = .ready;
-                // self.turn = 0;
+                self.turn = 0;
                 self.player.entity.health = max_player_health;
                 self.player.active_item = .fists;
                 self.player.items = 0b1;
@@ -146,8 +149,6 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                 }
 
                 update_world_lightmap(self);
-
-                // self.turn = 0;
             }
 
             fn spawn_pickup(self: *@This(), location: world.Location, kind: anytype) void {
@@ -609,14 +610,15 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                 .title => title_screen(state, input),
                 .controls => controls_screen(input),
                 .game => update_and_render_game(state, input),
-                .dead => simple_screen(input, "YOU DIED", .title, null),
-                .win => simple_screen(input, "YOU ESCAPED", .title, null),
+                .dead => stats_screen(state, input, "YOU DIED", .title, null),
+                .win => stats_screen(state, input, "YOU ESCAPED", .title, null),
             }
         }
 
         fn update_and_render_game(state: anytype, input: anytype) void {
             if (state.level == data.levels.len) {
                 screen = .win;
+                // state.game_elapsed_ns = state.timer.read();
                 return;
             }
 
@@ -671,9 +673,11 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                 },
                 .complete => {
                     if (state.player.entity.health <= 0) {
+                        util.trace("player died");
                         screen = .dead;
+                        // state.game_elapsed_ns = state.timer.read();
                     }
-                    // state.turn += 1;
+                    state.turn += 1;
                     state.turn_state = .ready;
                 },
             }
@@ -700,9 +704,11 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                 screen = .game;
                 state.reset();
                 state.load_level(0);
+                util.trace("start game");
             } else if (input.pressed.action_2 > 0) {
                 sfx.walk();
                 screen = .controls;
+                util.trace("show controls");
             }
         }
 
@@ -712,16 +718,27 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
             if (input.pressed.action_1 + input.pressed.action_2 > 0) {
                 sfx.walk();
                 screen = .title;
+                util.trace("return to title screen");
             }
         }
 
-        fn simple_screen(
+        fn stats_screen(
+            state: anytype,
             input: anytype,
-            text_str: []const u8,
+            title_text: []const u8,
             advance_screen: Screen,
             maybe_retreat_screen: ?Screen,
         ) void {
-            gfx.draw_text_centred(text_str);
+            gfx.draw_screen_title(title_text);
+
+            // const total_elasped_sec = @divTrunc(state.game_elapsed_ns, 1_000_000_000);
+            // const elapsed_minutes = @divTrunc(total_elasped_sec, 60);
+            // const elapsed_seconds = total_elasped_sec - (elapsed_minutes + 60);
+            gfx.draw_stats(.{
+                .turns_taken = state.turn,
+                // .elapsed_m = elapsed_minutes,
+                // .elapsed_s = elapsed_seconds,
+            });
 
             if (input.pressed.action_1 > 0) {
                 sfx.walk();
