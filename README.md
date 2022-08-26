@@ -4,12 +4,15 @@ A retro action-RPG written in [Zig](https://ziglang.org/) for [WASM-4 Jam #2](ht
 
 ## Building
 
-(using Zig 0.9.1)
+### System requirements
+- [Zig 0.9.1](https://github.com/ziglang/zig/releases/tag/0.9.1)
+- [wasm-opt](https://www.npmjs.com/package/wasm-opt)
+- [wasm-4](https://wasm4.org/)
 
-Build the cart by running:
+Build the cart (debug) by running:
 
 ```shell
-zig build -Drelease-small=true
+zig build
 ```
 
 Then run it with:
@@ -18,11 +21,16 @@ Then run it with:
 w4 run zig-out/lib/cart.wasm
 ```
 
-For more info about setting up WASM-4, see the [quickstart guide](https://wasm4.org/docs/getting-started/setup?code-lang=zig#quickstart).
+or
 
-## Links
+```shell
+w4 watch zig-out/lib/cart.wasm
+```
 
-- [Documentation](https://wasm4.org/docs): Learn more about WASM-4.
-- [Snake Tutorial](https://wasm4.org/docs/tutorials/snake/goal): Learn how to build a complete game
-  with a step-by-step tutorial.
-- [GitHub](https://github.com/aduros/wasm4): Submit an issue or PR. Contributions are welcome!
+Produce a size-optimised release build by running:
+
+```shell
+zig build release
+```
+
+And remember to test it!

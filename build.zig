@@ -22,4 +22,22 @@ pub fn build(b: *std.build.Builder) !void {
     lib.export_symbol_names = &[_][]const u8{ "start", "update" };
 
     lib.install();
+
+    const prefix = b.getInstallPath(.lib, "");
+    const opt = b.addSystemCommand(&[_][]const u8{
+        "wasm-opt",
+        "-Oz",
+        "--strip-debug",
+        "--strip-producers",
+        "--zero-filled-memory",
+    });
+
+    opt.addArtifactArg(lib);
+    const optout = try std.fs.path.join(b.allocator, &.{ prefix, "opt.wasm" });
+    defer b.allocator.free(optout);
+    opt.addArgs(&.{ "--output", optout });
+
+    const release_build = b.step("release", "Run wasm-opt on cart.wasm, producing opt.wasm");
+    release_build.dependOn(&lib.step);
+    release_build.dependOn(&opt.step);
 }
