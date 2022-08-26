@@ -7,9 +7,9 @@ A retro action-RPG written in [Zig](https://ziglang.org/) for [WASM-4 Jam #2](ht
 ### System requirements
 - [Zig 0.9.1](https://github.com/ziglang/zig/releases/tag/0.9.1)
 - [wasm-opt](https://www.npmjs.com/package/wasm-opt)
-- [wasm-4](https://wasm4.org/)
+- [WASM-4](https://wasm4.org/)
 
-Build the cart (debug) by running:
+Build (debug) the cart (zig-out/lib/cart.wasm) by running:
 
 ```shell
 zig build
@@ -18,19 +18,17 @@ zig build
 Then run it with:
 
 ```shell
-w4 run zig-out/lib/cart.wasm
-```
-
-or
-
-```shell
 w4 watch zig-out/lib/cart.wasm
 ```
 
-Produce a size-optimised release build by running:
+Produce a size-optimised release build (zig-out/lib/opt.wasm) by running:
 
 ```shell
 zig build release
 ```
 
-And remember to test it!
+And remember to test it:
+
+```shell
+w4 watch zig-out/lib/opt.wasm
+```

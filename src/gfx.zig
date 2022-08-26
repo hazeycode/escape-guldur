@@ -36,16 +36,10 @@ pub fn draw_world(state: anytype, data: anytype) void {
                         );
                     },
                     else => {
-                        w4.DRAW_COLORS.* = 0x43;
+                        // TODO(hazeycode): optimise floor drawing by deferring and rendering contiguous blocks
+                        w4.DRAW_COLORS.* = 0x33;
                         const screen_pos = world_to_screen(location, state.camera_location);
-                        w4.blit(
-                            &data.Sprites.floor,
-                            screen_pos.x,
-                            screen_pos.y,
-                            tile_px_width,
-                            tile_px_height,
-                            w4.BLIT_1BPP,
-                        );
+                        w4.rect(screen_pos.x, screen_pos.y, tile_px_width, tile_px_height);
                     },
                 }
             }
@@ -65,8 +59,8 @@ pub fn draw_enemies(state: anytype, data: anytype) void {
                 &data.Sprites.monster,
                 screen_pos.x,
                 screen_pos.y,
-                8,
-                8,
+                tile_px_width,
+                tile_px_height,
                 w4.BLIT_1BPP,
             );
         }
@@ -81,8 +75,8 @@ pub fn draw_enemies(state: anytype, data: anytype) void {
                 &data.Sprites.fire_monster,
                 screen_pos.x,
                 screen_pos.y,
-                8,
-                8,
+                tile_px_width,
+                tile_px_height,
                 w4.BLIT_1BPP,
             );
         }
@@ -106,8 +100,8 @@ pub fn draw_pickups(state: anytype, data: anytype) void {
                 },
                 screen_pos.x,
                 screen_pos.y,
-                8,
-                8,
+                tile_px_width,
+                tile_px_height,
                 w4.BLIT_1BPP,
             );
         }
@@ -122,8 +116,8 @@ pub fn draw_player(state: anytype, data: anytype) void {
         &data.Sprites.player,
         screen_pos.x,
         screen_pos.y,
-        8,
-        8,
+        tile_px_width,
+        tile_px_height,
         w4.BLIT_1BPP,
     );
 }
@@ -138,8 +132,8 @@ pub fn draw_fire(state: anytype, data: anytype) void { // draw fire
                 &data.Sprites.fire_big,
                 screen_pos.x,
                 screen_pos.y,
-                8,
-                8,
+                tile_px_width,
+                tile_px_height,
                 w4.BLIT_1BPP,
             );
         }
@@ -174,8 +168,8 @@ pub fn draw_hud(state: anytype, data: anytype) void {
                 if (i == state.action_target) &data.Sprites.tile_reticule_active else &data.Sprites.tile_reticule_inactive,
                 screen_pos.x,
                 screen_pos.y,
-                8,
-                8,
+                tile_px_width,
+                tile_px_height,
                 w4.BLIT_1BPP,
             );
         }

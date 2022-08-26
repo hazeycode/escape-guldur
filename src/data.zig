@@ -93,17 +93,6 @@ pub const levels = [4][20 * 20]u4{
 };
 
 pub const Sprites = struct {
-    pub const floor = [8]u8{
-        0b00000000,
-        0b00000000,
-        0b00000000,
-        0b00000000,
-        0b00000000,
-        0b00000000,
-        0b00000000,
-        0b00000000,
-    };
-
     pub const door = [8]u8{
         0b11111111,
         0b11111111,
