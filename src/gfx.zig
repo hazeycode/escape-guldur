@@ -1,6 +1,8 @@
 const w4 = @import("wasm4.zig");
 const w4_util = @import("wasm4_util.zig");
 
+const std = @import("std");
+
 const world = @import("world.zig");
 
 const tile_px_width = 10;
@@ -296,12 +298,21 @@ pub fn draw_text_number(number: i32, x: i32, y: i32) u16 {
         w4.text("-", x + dx, y);
     }
 
-    var n = @intCast(u16, if (number < 0) -number else number);
-    while (true) {
+    const number_abs = @intCast(u16, if (number < 0) -number else number);
+
+    const num_digits = count_digits_fast(number_abs);
+
+    var i: u16 = num_digits;
+    var n = number_abs;
+    var m: u16 = 0;
+    while (i > 0) : (i -= 1) {
         dx += 8;
 
-        n = @divTrunc(n, 10);
-        w4.text(&[_]u8{'0' + @truncate(u8, @mod(n, 10))}, x + dx, y);
+        n = @divTrunc(number_abs - m, std.math.pow(u16, 10, i - 1));
+        m += n * std.math.pow(u16, 10, i - 1);
+
+        const digit = '0' + @truncate(u8, n);
+        w4.text(&[_]u8{digit}, x + dx, y);
 
         if (n == 0) break;
     }
