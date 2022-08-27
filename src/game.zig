@@ -311,7 +311,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
 
         fn test_can_ranged_attack(state: *State, location: world.Location) bool {
             const d = state.player.entity.location.manhattan_to(location);
-            if (d < 11) {
+            if (d < 9) {
                 const res = world.check_line_of_sight(
                     WorldMap,
                     state.world_map,
@@ -576,25 +576,15 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
             while (location.x < world.size_x) : (location.x += 1) {
                 defer location.y = 0;
                 while (location.y < world.size_y) : (location.y += 1) {
-                    if (world.map_get_tile_kind(state.world_map, location) == .door) {
+                    world.map_set_tile(&state.world_vis_map, location, 0);
+                    if (location.manhattan_to(state.player.entity.location) < 9 and
+                        world.check_line_of_sight(
+                        WorldMap,
+                        state.world_map,
+                        location,
+                        state.player.entity.location,
+                    ).hit_target) {
                         world.map_set_tile(&state.world_vis_map, location, 1);
-                        continue;
-                    }
-
-                    if (location.manhattan_to(state.player.entity.location) > 13) {
-                        world.map_set_tile(&state.world_vis_map, location, @as(u8, 0));
-                    } else {
-                        const res = world.check_line_of_sight(
-                            WorldMap,
-                            state.world_map,
-                            location,
-                            state.player.entity.location,
-                        );
-                        world.map_set_tile(
-                            &state.world_vis_map,
-                            location,
-                            @as(u4, if (res.hit_target) 1 else 0),
-                        );
                     }
                 }
             }

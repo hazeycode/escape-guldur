@@ -3,8 +3,8 @@ const w4_util = @import("wasm4_util.zig");
 
 const world = @import("world.zig");
 
-const tile_px_width = 8;
-const tile_px_height = 8;
+const tile_px_width = 10;
+const tile_px_height = 10;
 
 const ScreenPosition = struct { x: i32, y: i32 };
 
@@ -24,14 +24,14 @@ pub fn draw_world(state: anytype, data: anytype) void {
                 switch (world.map_get_tile_kind(state.world_map, location)) {
                     .wall, .locked_door => {},
                     .door => {
-                        w4.DRAW_COLORS.* = 0x03;
+                        w4.DRAW_COLORS.* = 0x30;
                         const screen_pos = world_to_screen(location, state.camera_location);
                         w4.blit(
                             &data.Sprites.door,
-                            screen_pos.x,
-                            screen_pos.y,
-                            tile_px_width,
-                            tile_px_height,
+                            screen_pos.x + 1,
+                            screen_pos.y + 2,
+                            8,
+                            8,
                             w4.BLIT_1BPP,
                         );
                     },
@@ -57,10 +57,10 @@ pub fn draw_enemies(state: anytype, data: anytype) void {
             const screen_pos = world_to_screen(monster.entity.location, state.camera_location);
             w4.blit(
                 &data.Sprites.monster,
-                screen_pos.x,
-                screen_pos.y,
-                tile_px_width,
-                tile_px_height,
+                screen_pos.x + 1,
+                screen_pos.y + 1,
+                8,
+                8,
                 w4.BLIT_1BPP,
             );
         }
@@ -73,10 +73,10 @@ pub fn draw_enemies(state: anytype, data: anytype) void {
             const screen_pos = world_to_screen(fire_monster.entity.location, state.camera_location);
             w4.blit(
                 &data.Sprites.fire_monster,
-                screen_pos.x,
-                screen_pos.y,
-                tile_px_width,
-                tile_px_height,
+                screen_pos.x + 1,
+                screen_pos.y + 1,
+                8,
+                8,
                 w4.BLIT_1BPP,
             );
         }
@@ -98,10 +98,10 @@ pub fn draw_pickups(state: anytype, data: anytype) void {
                     .sword => &data.Sprites.sword,
                     .small_axe => &data.Sprites.small_axe,
                 },
-                screen_pos.x,
-                screen_pos.y,
-                tile_px_width,
-                tile_px_height,
+                screen_pos.x + 1,
+                screen_pos.y + 1,
+                8,
+                8,
                 w4.BLIT_1BPP,
             );
         }
@@ -114,10 +114,10 @@ pub fn draw_player(state: anytype, data: anytype) void {
     const screen_pos = world_to_screen(state.player.entity.location, state.camera_location);
     w4.blit(
         &data.Sprites.player,
-        screen_pos.x,
-        screen_pos.y,
-        tile_px_width,
-        tile_px_height,
+        screen_pos.x + 1,
+        screen_pos.y + 1,
+        8,
+        8,
         w4.BLIT_1BPP,
     );
 }
@@ -126,25 +126,30 @@ pub fn draw_fire(state: anytype, data: anytype) void { // draw fire
     w4.DRAW_COLORS.* = 0x40;
 
     for (state.fire) |*fire| {
-        if (fire.entity.health > 0 and world.map_get_tile(state.world_vis_map, fire.entity.location) > 0) {
+        if (fire.entity.health == 0) {
+            continue;
+        }
+
+        if (world.map_get_tile(state.world_vis_map, fire.entity.location) > 0) {
             const screen_pos = world_to_screen(fire.entity.location, state.camera_location);
             w4.blit(
                 &data.Sprites.fire_big,
-                screen_pos.x,
-                screen_pos.y,
-                tile_px_width,
-                tile_px_height,
+                screen_pos.x + 1,
+                screen_pos.y + 1,
+                8,
+                8,
                 w4.BLIT_1BPP,
             );
         }
+
         if (fire.path.length > 1) {
             const location = fire.path.locations[1];
             if (world.map_get_tile(state.world_vis_map, location) > 0) {
                 const screen_pos = world_to_screen(location, state.camera_location);
                 w4.blit(
                     &data.Sprites.fire_small,
-                    screen_pos.x,
-                    screen_pos.y,
+                    screen_pos.x + 1,
+                    screen_pos.y + 1,
                     8,
                     8,
                     w4.BLIT_1BPP,
@@ -162,16 +167,38 @@ pub fn draw_hud(state: anytype, data: anytype) void {
 
         var i: usize = 0;
         while (i < state.action_target_count) : (i += 1) {
-            w4.DRAW_COLORS.* = 0x40;
+            w4.DRAW_COLORS.* = 0x4444;
             const screen_pos = world_to_screen(state.action_targets[i], state.camera_location);
-            w4.blit(
-                if (i == state.action_target) &data.Sprites.tile_reticule_active else &data.Sprites.tile_reticule_inactive,
+            w4.line(
                 screen_pos.x,
+                screen_pos.y + tile_px_height / 2 - 1,
+                screen_pos.x + tile_px_width / 2 - 1,
                 screen_pos.y,
-                tile_px_width,
-                tile_px_height,
-                w4.BLIT_1BPP,
             );
+            w4.line(
+                screen_pos.x + tile_px_width / 2,
+                screen_pos.y,
+                screen_pos.x + tile_px_width - 1,
+                screen_pos.y + tile_px_height / 2 - 1,
+            );
+            w4.line(
+                screen_pos.x + tile_px_width - 1,
+                screen_pos.y + tile_px_height / 2,
+                screen_pos.x + tile_px_width / 2,
+                screen_pos.y + tile_px_height - 1,
+            );
+            w4.line(
+                screen_pos.x + tile_px_width / 2 - 1,
+                screen_pos.y + tile_px_height - 1,
+                screen_pos.x,
+                screen_pos.y + tile_px_height / 2,
+            );
+            if (i == state.action_target) {
+                w4.hline(screen_pos.x, screen_pos.y, tile_px_width);
+                w4.hline(screen_pos.x, screen_pos.y + tile_px_height - 1, tile_px_width);
+                w4.vline(screen_pos.x, screen_pos.y, tile_px_width);
+                w4.vline(screen_pos.x + tile_px_width - 1, screen_pos.y, tile_px_width);
+            }
         }
     }
 
@@ -229,7 +256,7 @@ pub fn draw_stats(stats: anytype) void {
     }
 
     // {
-    //     const y = w4.SCREEN_SIZE / 2 + 2;
+    //     const y = w4.SCREEN_SIZE / 2 + 1;
     //     var x: i32 = 10;
 
     //     if (stats.elapsed_m > 99) {
