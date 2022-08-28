@@ -336,7 +336,11 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
             util.trace("responding to move...");
 
             defer {
-                if (state.player.entity.health < 0) state.player.entity.health = 0;
+                update_world_lightmap(state);
+
+                if (state.player.entity.health < 0) {
+                    state.player.entity.health = 0;
+                }
 
                 // TODO: animate response to move before state change
                 state.turn_state = .complete;
@@ -458,8 +462,6 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                     random_walk(state, &fire_monster.entity);
                 }
             }
-
-            update_world_lightmap(state);
         }
 
         /// Returns true if the location is not occupied by a blocking tile or blocking entity
@@ -577,12 +579,12 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                 defer location.y = 0;
                 while (location.y < world.size_y) : (location.y += 1) {
                     world.map_set_tile(&state.world_vis_map, location, 0);
-                    if (location.manhattan_to(state.player.entity.location) < 9 and
+                    if (state.player.entity.location.manhattan_to(location) < 9 and
                         world.check_line_of_sight(
                         WorldMap,
                         state.world_map,
-                        location,
                         state.player.entity.location,
+                        location,
                     ).hit_target) {
                         world.map_set_tile(&state.world_vis_map, location, 1);
                     }
@@ -678,12 +680,78 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                 state.camera_location = state.action_targets[state.action_target];
             }
 
-            gfx.draw_world(state, data);
-            gfx.draw_enemies(state, data);
-            gfx.draw_pickups(state, data);
-            gfx.draw_player(state, data);
-            gfx.draw_fire(state, data);
-            gfx.draw_hud(state, data);
+            gfx.draw_world(state);
+
+            var sprite_list = gfx.SpriteList{};
+
+            { // draw enemies
+                for (state.monsters) |*monster| {
+                    if (monster.entity.health > 0 and
+                        world.map_get_tile(state.world_vis_map, monster.entity.location) > 0)
+                    {
+                        sprite_list.push_sprite(.{
+                            .id = .monster,
+                            .animation_frame = 0,
+                            .position = gfx.world_to_screen(
+                                monster.entity.location,
+                                state.camera_location,
+                            ),
+                        });
+                    }
+                }
+
+                for (state.fire_monsters) |*fire_monster| {
+                    if (fire_monster.entity.health > 0 and
+                        world.map_get_tile(state.world_vis_map, fire_monster.entity.location) > 0)
+                    {
+                        sprite_list.push_sprite(.{
+                            .id = .fire_monster,
+                            .animation_frame = 0,
+                            .position = gfx.world_to_screen(
+                                fire_monster.entity.location,
+                                state.camera_location,
+                            ),
+                        });
+                    }
+                }
+            }
+
+            // draw pickups
+            for (state.pickups) |*pickup| {
+                if (pickup.entity.health > 0 and world.map_get_tile(
+                    state.world_vis_map,
+                    pickup.entity.location,
+                ) > 0) {
+                    sprite_list.push_sprite(.{
+                        .id = switch (pickup.kind) {
+                            .health => .heart,
+                            .sword => .sword,
+                            .small_axe => .small_axe,
+                        },
+                        .animation_frame = 0,
+                        .position = gfx.world_to_screen(
+                            pickup.entity.location,
+                            state.camera_location,
+                        ),
+                    });
+                }
+            }
+
+            // draw player
+            sprite_list.push_sprite(.{
+                .id = .player,
+                .animation_frame = 0,
+                .position = gfx.world_to_screen(
+                    state.player.entity.location,
+                    state.camera_location,
+                ),
+            });
+
+            sprite_list.submit();
+
+            gfx.draw_fire(state);
+
+            gfx.draw_hud(state);
         }
 
         fn title_screen(state: anytype, input: anytype) void {
