@@ -680,8 +680,6 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                 state.camera_location = state.action_targets[state.action_target];
             }
 
-            gfx.draw_world(state);
-
             var sprite_list = gfx.SpriteList{};
 
             { // draw enemies
@@ -689,13 +687,17 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                     if (monster.entity.health > 0 and
                         world.map_get_tile(state.world_vis_map, monster.entity.location) > 0)
                     {
+                        const screen_pos = gfx.world_to_screen(
+                            monster.entity.location,
+                            state.camera_location,
+                        );
                         sprite_list.push_sprite(.{
-                            .id = .monster,
-                            .animation_frame = 0,
-                            .position = gfx.world_to_screen(
-                                monster.entity.location,
-                                state.camera_location,
-                            ),
+                            .texture = &data.Textures.monster,
+                            .draw_colours = 0x20,
+                            .screen_x = screen_pos.x + 1,
+                            .screen_y = screen_pos.y - gfx.tile_px_height / 2,
+                            .width = 8,
+                            .height = 10,
                         });
                     }
                 }
@@ -704,13 +706,17 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                     if (fire_monster.entity.health > 0 and
                         world.map_get_tile(state.world_vis_map, fire_monster.entity.location) > 0)
                     {
+                        const screen_pos = gfx.world_to_screen(
+                            fire_monster.entity.location,
+                            state.camera_location,
+                        );
                         sprite_list.push_sprite(.{
-                            .id = .fire_monster,
-                            .animation_frame = 0,
-                            .position = gfx.world_to_screen(
-                                fire_monster.entity.location,
-                                state.camera_location,
-                            ),
+                            .texture = &data.Textures.fire_monster,
+                            .draw_colours = 0x20,
+                            .screen_x = screen_pos.x + 1,
+                            .screen_y = screen_pos.y - gfx.tile_px_height / 2,
+                            .width = 8,
+                            .height = 8,
                         });
                     }
                 }
@@ -722,32 +728,49 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                     state.world_vis_map,
                     pickup.entity.location,
                 ) > 0) {
+                    const screen_pos = gfx.world_to_screen(
+                        pickup.entity.location,
+                        state.camera_location,
+                    );
                     sprite_list.push_sprite(.{
-                        .id = switch (pickup.kind) {
-                            .health => .heart,
-                            .sword => .sword,
-                            .small_axe => .small_axe,
+                        .texture = switch (pickup.kind) {
+                            .health => &data.Textures.heart,
+                            .sword => &data.Textures.sword,
+                            .small_axe => &data.Textures.small_axe,
                         },
-                        .animation_frame = 0,
-                        .position = gfx.world_to_screen(
-                            pickup.entity.location,
-                            state.camera_location,
-                        ),
+                        .draw_colours = 0x40,
+                        .screen_x = screen_pos.x + 1,
+                        .screen_y = screen_pos.y - gfx.tile_px_height / 2 + 1,
+                        .width = 8,
+                        .height = 8,
                     });
                 }
             }
 
-            // draw player
-            sprite_list.push_sprite(.{
-                .id = .player,
-                .animation_frame = 0,
-                .position = gfx.world_to_screen(
+            { // draw player
+                const screen_pos = gfx.world_to_screen(
                     state.player.entity.location,
                     state.camera_location,
-                ),
-            });
+                );
+                sprite_list.push_sprite(.{
+                    .texture = &data.Textures.player,
+                    .draw_colours = 0x20,
+                    .screen_x = screen_pos.x + 1,
+                    .screen_y = screen_pos.y - gfx.tile_px_height / 2,
+                    .width = 8,
+                    .height = 10,
+                });
+            }
 
-            sprite_list.submit();
+            gfx.draw_world(state);
+
+            sprite_list.draw_shadows();
+
+            if (state.turn_state == .aim) {
+                gfx.draw_tile_markers(state);
+            }
+
+            sprite_list.draw();
 
             gfx.draw_fire(state);
 

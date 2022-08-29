@@ -6,11 +6,11 @@ const std = @import("std");
 const world = @import("world.zig");
 
 pub fn with_data(data: anytype) type {
-    const tile_px_width = 10;
-    const tile_px_height = 10;
-    const max_sprites = 32;
-
     return struct {
+        pub const tile_px_width = 10;
+        pub const tile_px_height = 9;
+        pub const max_sprites = 32;
+
         const ScreenPosition = struct { x: i32, y: i32 };
 
         pub fn world_to_screen(
@@ -24,9 +24,12 @@ pub fn with_data(data: anytype) type {
         }
 
         pub const Sprite = struct {
-            id: enum(u16) { player, monster, fire_monster, heart, sword, small_axe },
-            animation_frame: u16,
-            position: ScreenPosition,
+            texture: [*]const u8,
+            draw_colours: u16,
+            screen_x: i32,
+            screen_y: i32,
+            width: u16,
+            height: u16,
         };
 
         pub const SpriteList = struct {
@@ -41,7 +44,7 @@ pub fn with_data(data: anytype) type {
 
                 var i = self.entries_count;
                 while (i > 0) : (i -= 1) {
-                    if (self.entries[i].position.y <= sprite.position.y) {
+                    if (self.entries[i].screen_y <= sprite.screen_y) {
                         var j = self.entries_count - 1;
                         while (j > i) : (j -= 1) {
                             self.entries[j] = self.entries[j - 1];
@@ -54,76 +57,29 @@ pub fn with_data(data: anytype) type {
                 self.entries_count += 1;
             }
 
-            pub fn submit(self: *@This()) void {
+            pub fn draw_shadows(self: @This()) void {
                 for (self.entries[0..self.entries_count]) |sprite| {
-                    switch (sprite.id) {
-                        .player => {
-                            w4.DRAW_COLORS.* = 0x20;
-                            w4.blit(
-                                &data.Sprites.player,
-                                sprite.position.x + 1,
-                                sprite.position.y + 1,
-                                8,
-                                8,
-                                w4.BLIT_1BPP,
-                            );
-                        },
-                        .monster => {
-                            w4.DRAW_COLORS.* = 0x02;
-                            w4.blit(
-                                &data.Sprites.monster,
-                                sprite.position.x + 1,
-                                sprite.position.y + 1,
-                                8,
-                                8,
-                                w4.BLIT_1BPP,
-                            );
-                        },
-                        .fire_monster => {
-                            w4.DRAW_COLORS.* = 0x02;
-                            w4.blit(
-                                &data.Sprites.fire_monster,
-                                sprite.position.x + 1,
-                                sprite.position.y + 1,
-                                8,
-                                8,
-                                w4.BLIT_1BPP,
-                            );
-                        },
-                        .heart => {
-                            w4.DRAW_COLORS.* = 0x40;
-                            w4.blit(
-                                &data.Sprites.heart,
-                                sprite.position.x + 1,
-                                sprite.position.y + 1,
-                                8,
-                                8,
-                                w4.BLIT_1BPP,
-                            );
-                        },
-                        .sword => {
-                            w4.DRAW_COLORS.* = 0x40;
-                            w4.blit(
-                                &data.Sprites.sword,
-                                sprite.position.x + 1,
-                                sprite.position.y + 1,
-                                8,
-                                8,
-                                w4.BLIT_1BPP,
-                            );
-                        },
-                        .small_axe => {
-                            w4.DRAW_COLORS.* = 0x40;
-                            w4.blit(
-                                &data.Sprites.small_axe,
-                                sprite.position.x + 1,
-                                sprite.position.y + 1,
-                                8,
-                                8,
-                                w4.BLIT_1BPP,
-                            );
-                        },
-                    }
+                    w4.DRAW_COLORS.* = 0x11;
+                    w4.oval(
+                        sprite.screen_x + 1,
+                        sprite.screen_y + tile_px_height + 1,
+                        tile_px_width - 4,
+                        2,
+                    );
+                }
+            }
+
+            pub fn draw(self: *@This()) void {
+                for (self.entries[0..self.entries_count]) |sprite| {
+                    w4.DRAW_COLORS.* = sprite.draw_colours;
+                    w4.blit(
+                        sprite.texture,
+                        sprite.screen_x,
+                        sprite.screen_y,
+                        sprite.width,
+                        sprite.height,
+                        w4.BLIT_1BPP,
+                    );
                 }
             }
         };
@@ -140,7 +96,7 @@ pub fn with_data(data: anytype) type {
                                 w4.DRAW_COLORS.* = 0x30;
                                 const screen_pos = world_to_screen(location, state.camera_location);
                                 w4.blit(
-                                    &data.Sprites.door,
+                                    &data.Textures.door,
                                     screen_pos.x + 1,
                                     screen_pos.y + 2,
                                     8,
@@ -174,7 +130,7 @@ pub fn with_data(data: anytype) type {
                         state.camera_location,
                     );
                     w4.blit(
-                        &data.Sprites.fire_big,
+                        &data.Textures.fire_big,
                         screen_pos.x + 1,
                         screen_pos.y + 1,
                         8,
@@ -188,7 +144,7 @@ pub fn with_data(data: anytype) type {
                     if (world.map_get_tile(state.world_vis_map, location) > 0) {
                         const screen_pos = world_to_screen(location, state.camera_location);
                         w4.blit(
-                            &data.Sprites.fire_small,
+                            &data.Textures.fire_small,
                             screen_pos.x + 1,
                             screen_pos.y + 1,
                             8,
@@ -200,47 +156,47 @@ pub fn with_data(data: anytype) type {
             }
         }
 
+        pub fn draw_tile_markers(state: anytype) void {
+            var i: usize = 0;
+            while (i < state.action_target_count) : (i += 1) {
+                w4.DRAW_COLORS.* = 0x4444;
+                const screen_pos = world_to_screen(state.action_targets[i], state.camera_location);
+                w4.line(
+                    screen_pos.x,
+                    screen_pos.y + tile_px_height / 2 - 1,
+                    screen_pos.x + tile_px_width / 2 - 1,
+                    screen_pos.y,
+                );
+                w4.line(
+                    screen_pos.x + tile_px_width / 2,
+                    screen_pos.y,
+                    screen_pos.x + tile_px_width - 1,
+                    screen_pos.y + tile_px_height / 2 - 1,
+                );
+                w4.line(
+                    screen_pos.x + tile_px_width - 1,
+                    screen_pos.y + tile_px_height / 2 - 1,
+                    screen_pos.x + tile_px_width / 2,
+                    screen_pos.y + tile_px_height - 2,
+                );
+                w4.line(
+                    screen_pos.x + tile_px_width / 2 - 1,
+                    screen_pos.y + tile_px_height - 2,
+                    screen_pos.x,
+                    screen_pos.y + tile_px_height / 2 - 1,
+                );
+            }
+        }
+
         pub fn draw_hud(state: anytype) void {
             if (state.turn_state == .aim) {
                 w4.DRAW_COLORS.* = 0x04;
 
-                w4.text(if (state.action_target_count == 0) "NO TARGETS" else "AIM", 1, w4.SCREEN_SIZE - (8 + 1) * 2);
-
-                var i: usize = 0;
-                while (i < state.action_target_count) : (i += 1) {
-                    w4.DRAW_COLORS.* = 0x4444;
-                    const screen_pos = world_to_screen(state.action_targets[i], state.camera_location);
-                    w4.line(
-                        screen_pos.x,
-                        screen_pos.y + tile_px_height / 2 - 1,
-                        screen_pos.x + tile_px_width / 2 - 1,
-                        screen_pos.y,
-                    );
-                    w4.line(
-                        screen_pos.x + tile_px_width / 2,
-                        screen_pos.y,
-                        screen_pos.x + tile_px_width - 1,
-                        screen_pos.y + tile_px_height / 2 - 1,
-                    );
-                    w4.line(
-                        screen_pos.x + tile_px_width - 1,
-                        screen_pos.y + tile_px_height / 2,
-                        screen_pos.x + tile_px_width / 2,
-                        screen_pos.y + tile_px_height - 1,
-                    );
-                    w4.line(
-                        screen_pos.x + tile_px_width / 2 - 1,
-                        screen_pos.y + tile_px_height - 1,
-                        screen_pos.x,
-                        screen_pos.y + tile_px_height / 2,
-                    );
-                    if (i == state.action_target) {
-                        w4.hline(screen_pos.x, screen_pos.y, tile_px_width);
-                        w4.hline(screen_pos.x, screen_pos.y + tile_px_height - 1, tile_px_width);
-                        w4.vline(screen_pos.x, screen_pos.y, tile_px_width);
-                        w4.vline(screen_pos.x + tile_px_width - 1, screen_pos.y, tile_px_width);
-                    }
-                }
+                w4.text(
+                    if (state.action_target_count == 0) "NO TARGETS" else "AIM",
+                    1,
+                    w4.SCREEN_SIZE - (8 + 1) * 2,
+                );
             }
 
             { // draw health bar
@@ -255,7 +211,7 @@ pub fn with_data(data: anytype) type {
                     var i: usize = 0;
                     while (i < state.player.entity.health) : (i += 1) {
                         w4.blit(
-                            &data.Sprites.heart,
+                            &data.Textures.heart,
                             x,
                             y,
                             piece_width,
