@@ -31,6 +31,15 @@ pub const Location = struct {
     x: i16,
     y: i16,
 
+    pub fn walk(self: @This(), direction: Direction) Location {
+        return switch (direction) {
+            .north => self.north(),
+            .east => self.east(),
+            .south => self.south(),
+            .west => self.west(),
+        };
+    }
+
     pub fn eql(self: @This(), other: @This()) bool {
         return self.x == other.x and self.y == other.y;
     }

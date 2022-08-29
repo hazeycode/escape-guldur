@@ -24,12 +24,10 @@ pub fn with_data(data: anytype) type {
         }
 
         pub const Sprite = struct {
-            texture: [*]const u8,
+            texture: data.Texture,
             draw_colours: u16,
-            screen_x: i32,
-            screen_y: i32,
-            width: u16,
-            height: u16,
+            location: world.Location,
+            flip_x: bool = false,
         };
 
         pub const SpriteList = struct {
@@ -44,7 +42,7 @@ pub fn with_data(data: anytype) type {
 
                 var i = self.entries_count;
                 while (i > 0) : (i -= 1) {
-                    if (self.entries[i].screen_y <= sprite.screen_y) {
+                    if (self.entries[i].location.y <= sprite.location.y) {
                         var j = self.entries_count - 1;
                         while (j > i) : (j -= 1) {
                             self.entries[j] = self.entries[j - 1];
@@ -57,28 +55,35 @@ pub fn with_data(data: anytype) type {
                 self.entries_count += 1;
             }
 
-            pub fn draw_shadows(self: @This()) void {
+            pub fn draw_shadows(self: @This(), camera_location: world.Location) void {
                 for (self.entries[0..self.entries_count]) |sprite| {
                     w4.DRAW_COLORS.* = 0x11;
+                    const screen_pos = world_to_screen(sprite.location, camera_location);
                     w4.oval(
-                        sprite.screen_x + 1,
-                        sprite.screen_y + tile_px_height + 1,
-                        tile_px_width - 4,
+                        screen_pos.x + 2,
+                        screen_pos.y + tile_px_height / 2 - 2,
+                        6,
                         2,
                     );
                 }
             }
 
-            pub fn draw(self: *@This()) void {
+            pub fn draw(self: *@This(), camera_location: world.Location) void {
                 for (self.entries[0..self.entries_count]) |sprite| {
+                    const screen_pos = world_to_screen(
+                        sprite.location,
+                        camera_location,
+                    );
                     w4.DRAW_COLORS.* = sprite.draw_colours;
+                    var flags = w4.BLIT_1BPP;
+                    if (sprite.flip_x) flags |= w4.BLIT_FLIP_X;
                     w4.blit(
-                        sprite.texture,
-                        sprite.screen_x,
-                        sprite.screen_y,
-                        sprite.width,
-                        sprite.height,
-                        w4.BLIT_1BPP,
+                        sprite.texture.bytes,
+                        screen_pos.x + (tile_px_width - sprite.texture.width) / 2,
+                        (screen_pos.y + tile_px_height / 2) - sprite.texture.height,
+                        sprite.texture.width,
+                        sprite.texture.height,
+                        flags,
                     );
                 }
             }
@@ -96,7 +101,7 @@ pub fn with_data(data: anytype) type {
                                 w4.DRAW_COLORS.* = 0x30;
                                 const screen_pos = world_to_screen(location, state.camera_location);
                                 w4.blit(
-                                    &data.Textures.door,
+                                    data.Texture.door.bytes,
                                     screen_pos.x + 1,
                                     screen_pos.y + 2,
                                     8,
@@ -130,7 +135,7 @@ pub fn with_data(data: anytype) type {
                         state.camera_location,
                     );
                     w4.blit(
-                        &data.Textures.fire_big,
+                        data.Texture.fire_big.bytes,
                         screen_pos.x + 1,
                         screen_pos.y + 1,
                         8,
@@ -144,7 +149,7 @@ pub fn with_data(data: anytype) type {
                     if (world.map_get_tile(state.world_vis_map, location) > 0) {
                         const screen_pos = world_to_screen(location, state.camera_location);
                         w4.blit(
-                            &data.Textures.fire_small,
+                            data.Texture.fire_small.bytes,
                             screen_pos.x + 1,
                             screen_pos.y + 1,
                             8,
@@ -211,7 +216,7 @@ pub fn with_data(data: anytype) type {
                     var i: usize = 0;
                     while (i < state.player.entity.health) : (i += 1) {
                         w4.blit(
-                            &data.Textures.heart,
+                            data.Texture.heart.bytes,
                             x,
                             y,
                             piece_width,
