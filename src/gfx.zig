@@ -94,28 +94,28 @@ pub fn with_data(data: anytype) type {
             while (location.x < world.size_x) : (location.x += 1) {
                 defer location.y = 0;
                 while (location.y < world.size_y) : (location.y += 1) {
-                    if (world.map_get_tile(state.world_vis_map, location) > 0) {
-                        switch (world.map_get_tile_kind(state.world_map, location)) {
-                            .wall, .locked_door => {},
-                            .door => {
-                                w4.DRAW_COLORS.* = 0x30;
-                                const screen_pos = world_to_screen(location, state.camera_location);
-                                w4.blit(
-                                    data.Texture.door.bytes,
-                                    screen_pos.x + 1,
-                                    screen_pos.y + 2,
-                                    8,
-                                    8,
-                                    w4.BLIT_1BPP,
-                                );
-                            },
-                            else => {
+                    switch (world.map_get_tile_kind(state.world_map, location)) {
+                        .wall, .locked_door => {},
+                        .door => {
+                            w4.DRAW_COLORS.* = 0x30;
+                            const screen_pos = world_to_screen(location, state.camera_location);
+                            w4.blit(
+                                data.Texture.door.bytes,
+                                screen_pos.x + 1,
+                                screen_pos.y + (tile_px_width - data.Texture.door.width),
+                                data.Texture.door.width,
+                                data.Texture.door.height,
+                                w4.BLIT_1BPP,
+                            );
+                        },
+                        else => {
+                            if (world.map_get_tile(state.world_vis_map, location) > 0) {
                                 // TODO(hazeycode): optimise floor drawing by deferring and rendering contiguous blocks
                                 w4.DRAW_COLORS.* = 0x33;
                                 const screen_pos = world_to_screen(location, state.camera_location);
                                 w4.rect(screen_pos.x, screen_pos.y, tile_px_width, tile_px_height);
-                            },
-                        }
+                            }
+                        },
                     }
                 }
             }
