@@ -202,6 +202,33 @@ pub fn with_data(data: anytype) type {
                     1,
                     w4.SCREEN_SIZE - (8 + 1) * 2,
                 );
+
+                if (state.action_target_count > state.action_target) {
+                    const screen_pos = world_to_screen(
+                        state.action_targets[state.action_target],
+                        state.camera_location,
+                    );
+                    w4.hline(
+                        screen_pos.x - 1,
+                        screen_pos.y - tile_px_height / 2,
+                        tile_px_width + 1,
+                    );
+                    w4.hline(
+                        screen_pos.x - 1,
+                        screen_pos.y + tile_px_height - 2,
+                        tile_px_width + 1,
+                    );
+                    w4.vline(
+                        screen_pos.x - 1,
+                        screen_pos.y - tile_px_height / 2,
+                        tile_px_height + tile_px_height / 2 - 1,
+                    );
+                    w4.vline(
+                        screen_pos.x + tile_px_width,
+                        screen_pos.y - tile_px_height / 2,
+                        tile_px_height + tile_px_height / 2 - 1,
+                    );
+                }
             }
 
             { // draw health bar
