@@ -9,7 +9,7 @@ pub fn with_data(data: anytype) type {
     return struct {
         pub const tile_px_width = 10;
         pub const tile_px_height = 9;
-        pub const max_sprites = 32;
+        pub const max_sprites = 64;
 
         const ScreenPosition = struct { x: i32, y: i32 };
 
@@ -28,6 +28,7 @@ pub fn with_data(data: anytype) type {
             draw_colours: u16,
             location: world.Location,
             flip_x: bool = false,
+            casts_shadow: bool = false,
         };
 
         pub const SpriteList = struct {
@@ -57,14 +58,16 @@ pub fn with_data(data: anytype) type {
 
             pub fn draw_shadows(self: @This(), camera_location: world.Location) void {
                 for (self.entries[0..self.entries_count]) |sprite| {
-                    w4.DRAW_COLORS.* = 0x11;
-                    const screen_pos = world_to_screen(sprite.location, camera_location);
-                    w4.oval(
-                        screen_pos.x + 2,
-                        screen_pos.y + tile_px_height / 2 - 2,
-                        6,
-                        2,
-                    );
+                    if (sprite.casts_shadow) {
+                        w4.DRAW_COLORS.* = 0x11;
+                        const screen_pos = world_to_screen(sprite.location, camera_location);
+                        w4.oval(
+                            screen_pos.x + 2,
+                            screen_pos.y + tile_px_height / 2 - 2,
+                            6,
+                            2,
+                        );
+                    }
                 }
             }
 
@@ -116,46 +119,6 @@ pub fn with_data(data: anytype) type {
                                 w4.rect(screen_pos.x, screen_pos.y, tile_px_width, tile_px_height);
                             }
                         },
-                    }
-                }
-            }
-        }
-
-        pub fn draw_fire(state: anytype) void { // draw fire
-            w4.DRAW_COLORS.* = 0x40;
-
-            for (state.fire) |*fire| {
-                if (fire.entity.health == 0) {
-                    continue;
-                }
-
-                if (world.map_get_tile(state.world_vis_map, fire.entity.location) > 0) {
-                    const screen_pos = world_to_screen(
-                        fire.entity.location,
-                        state.camera_location,
-                    );
-                    w4.blit(
-                        data.Texture.fire_big.bytes,
-                        screen_pos.x + 1,
-                        screen_pos.y + 1,
-                        8,
-                        8,
-                        w4.BLIT_1BPP,
-                    );
-                }
-
-                if (fire.path.length > 1) {
-                    const location = fire.path.locations[1];
-                    if (world.map_get_tile(state.world_vis_map, location) > 0) {
-                        const screen_pos = world_to_screen(location, state.camera_location);
-                        w4.blit(
-                            data.Texture.fire_small.bytes,
-                            screen_pos.x + 1,
-                            screen_pos.y + 1,
-                            8,
-                            8,
-                            w4.BLIT_1BPP,
-                        );
                     }
                 }
             }

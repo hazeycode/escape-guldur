@@ -700,6 +700,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                             .texture = data.Texture.monster,
                             .draw_colours = 0x20,
                             .location = monster.entity.location,
+                            .casts_shadow = true,
                         });
                     }
                 }
@@ -712,6 +713,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                             .texture = data.Texture.fire_monster,
                             .draw_colours = 0x20,
                             .location = fire_monster.entity.location,
+                            .casts_shadow = true,
                         });
                     }
                 }
@@ -731,6 +733,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                         },
                         .draw_colours = 0x40,
                         .location = pickup.entity.location,
+                        .casts_shadow = true,
                     });
                 }
             }
@@ -741,7 +744,33 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                     .draw_colours = 0x20,
                     .location = state.player.entity.location,
                     .flip_x = flip_player_sprite,
+                    .casts_shadow = true,
                 });
+            }
+
+            for (state.fire) |*fire| {
+                if (fire.entity.health == 0) {
+                    continue;
+                }
+
+                if (world.map_get_tile(state.world_vis_map, fire.entity.location) > 0) {
+                    sprite_list.push_sprite(.{
+                        .texture = data.Texture.fire_big,
+                        .draw_colours = 0x40,
+                        .location = fire.entity.location,
+                    });
+                }
+
+                if (fire.path.length > 1) {
+                    const location = fire.path.locations[1];
+                    if (world.map_get_tile(state.world_vis_map, location) > 0) {
+                        sprite_list.push_sprite(.{
+                            .texture = data.Texture.fire_small,
+                            .draw_colours = 0x40,
+                            .location = location,
+                        });
+                    }
+                }
             }
 
             gfx.draw_world(state);
@@ -753,8 +782,6 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
             }
 
             sprite_list.draw(state.camera_location);
-
-            gfx.draw_fire(state);
 
             gfx.draw_hud(state);
         }
