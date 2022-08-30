@@ -480,18 +480,18 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
             }
 
             for (state.monsters) |*other| {
-                if (other.entity.health > 0 and other.entity.location.eql(location)) {
+                if (other.entity.health > 0 and other.entity.target_location.eql(location)) {
                     walkable = false;
                 }
             }
             for (state.fire_monsters) |*other| {
-                if (other.entity.health > 0 and other.entity.location.eql(location)) {
+                if (other.entity.health > 0 and other.entity.target_location.eql(location)) {
                     walkable = false;
                 }
             }
 
             for (state.pickups) |*other| {
-                if (other.entity.health > 0 and other.entity.location.eql(location)) {
+                if (other.entity.health > 0 and other.entity.target_location.eql(location)) {
                     walkable = false;
                 }
             }
