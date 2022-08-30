@@ -1,6 +1,6 @@
 # Escape Guldur
 
-A retro action-RPG written in [Zig](https://ziglang.org/), originally for [WASM-4 Jam #2](https://itch.io/jam/wasm4-v2).
+A retro action-RPG handmade with /[Zig](https://ziglang.org/) for the [WASM-4 fantasy console](https://wasm4.org/). Originally made for [WASM-4 Jam #2](https://itch.io/jam/wasm4-v2).
 
 ![title screen image](assets/images/title_screen_capture.png)
 
