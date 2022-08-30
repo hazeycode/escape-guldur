@@ -7,26 +7,62 @@ const world = @import("world.zig");
 
 pub fn with_data(data: anytype) type {
     return struct {
+        pub const screen_px_width = w4.SCREEN_SIZE;
+        pub const screen_px_height = w4.SCREEN_SIZE;
         pub const tile_px_width = 10;
         pub const tile_px_height = 9;
         pub const max_sprites = 64;
+        pub const move_animation_frames = 3;
 
-        const ScreenPosition = struct { x: i32, y: i32 };
+        pub var frame_counter: usize = 0;
 
-        pub fn world_to_screen(
-            location: world.Location,
-            camera_location: world.Location,
-        ) ScreenPosition {
+        const ScreenPosition = struct {
+            x: i32,
+            y: i32,
+
+            pub fn add(self: @This(), other: @This()) @This() {
+                return .{
+                    .x = self.x + other.x,
+                    .y = self.y + other.y,
+                };
+            }
+
+            pub fn sub(self: @This(), other: @This()) @This() {
+                return .{
+                    .x = self.x - other.x,
+                    .y = self.y - other.y,
+                };
+            }
+        };
+
+        pub fn world_to_screen(location: world.Location) ScreenPosition {
             return .{
-                .x = (location.x - camera_location.x) * tile_px_width + w4.SCREEN_SIZE / 2,
-                .y = (location.y - camera_location.y) * tile_px_height + w4.SCREEN_SIZE / 2,
+                .x = location.x * tile_px_width + w4.SCREEN_SIZE / 2,
+                .y = location.y * tile_px_height + w4.SCREEN_SIZE / 2,
             };
+        }
+
+        pub fn lerp(
+            from: world.Location,
+            to: world.Location,
+            animation_frame: usize,
+            total_frames: usize,
+        ) ScreenPosition {
+            var screen_pos = world_to_screen(from);
+            const target_screen_pos = world_to_screen(to);
+            const dt = @intToFloat(f32, animation_frame) / @intToFloat(f32, total_frames);
+            const dx = target_screen_pos.x - screen_pos.x;
+            const dy = target_screen_pos.y - screen_pos.y;
+            screen_pos.x += @floatToInt(i32, @intToFloat(f32, dx) * dt);
+            screen_pos.y += @floatToInt(i32, @intToFloat(f32, dy) * dt);
+            return screen_pos;
         }
 
         pub const Sprite = struct {
             texture: data.Texture,
             draw_colours: u16,
             location: world.Location,
+            target_location: world.Location = world.Location{ .x = 0, .y = 0 },
             flip_x: bool = false,
             casts_shadow: bool = false,
         };
@@ -56,34 +92,49 @@ pub fn with_data(data: anytype) type {
                 self.entries_count += 1;
             }
 
-            pub fn draw_shadows(self: @This(), camera_location: world.Location) void {
+            pub fn draw_shadows(
+                self: @This(),
+                camera_position: ScreenPosition,
+                animation_frame: usize,
+            ) void {
                 for (self.entries[0..self.entries_count]) |sprite| {
                     if (sprite.casts_shadow) {
+                        const screen_pos = lerp(
+                            sprite.location,
+                            sprite.target_location,
+                            animation_frame,
+                            move_animation_frames,
+                        ).sub(camera_position);
                         w4.DRAW_COLORS.* = 0x11;
-                        const screen_pos = world_to_screen(sprite.location, camera_location);
                         w4.oval(
                             screen_pos.x + 2,
-                            screen_pos.y + tile_px_height / 2 - 2,
-                            6,
+                            screen_pos.y + tile_px_height / 2,
+                            tile_px_width - 4,
                             2,
                         );
                     }
                 }
             }
 
-            pub fn draw(self: *@This(), camera_location: world.Location) void {
-                for (self.entries[0..self.entries_count]) |sprite| {
-                    const screen_pos = world_to_screen(
-                        sprite.location,
-                        camera_location,
-                    );
+            pub fn draw(
+                self: *@This(),
+                camera_position: ScreenPosition,
+                animation_frame: usize,
+            ) void {
+                for (self.entries[0..self.entries_count]) |*sprite| {
                     w4.DRAW_COLORS.* = sprite.draw_colours;
                     var flags = w4.BLIT_1BPP;
                     if (sprite.flip_x) flags |= w4.BLIT_FLIP_X;
+                    const screen_pos = lerp(
+                        sprite.location,
+                        sprite.target_location,
+                        animation_frame,
+                        move_animation_frames,
+                    ).sub(camera_position);
                     w4.blit(
                         sprite.texture.bytes,
                         screen_pos.x + (tile_px_width - sprite.texture.width) / 2,
-                        (screen_pos.y + tile_px_height / 2) - sprite.texture.height,
+                        screen_pos.y - sprite.texture.height / 2,
                         sprite.texture.width,
                         sprite.texture.height,
                         flags,
@@ -92,7 +143,7 @@ pub fn with_data(data: anytype) type {
             }
         };
 
-        pub fn draw_world(state: anytype) void {
+        pub fn draw_world(state: anytype, camera_position: ScreenPosition) void {
             var location: world.Location = .{ .x = 0, .y = 0 };
             while (location.x < world.size_x) : (location.x += 1) {
                 defer location.y = 0;
@@ -101,7 +152,7 @@ pub fn with_data(data: anytype) type {
                         .wall, .locked_door => {},
                         .door => {
                             w4.DRAW_COLORS.* = 0x30;
-                            const screen_pos = world_to_screen(location, state.camera_location);
+                            const screen_pos = world_to_screen(location).sub(camera_position);
                             w4.blit(
                                 data.Texture.door.bytes,
                                 screen_pos.x + 1,
@@ -115,7 +166,7 @@ pub fn with_data(data: anytype) type {
                             if (world.map_get_tile(state.world_vis_map, location) > 0) {
                                 // TODO(hazeycode): optimise floor drawing by deferring and rendering contiguous blocks
                                 w4.DRAW_COLORS.* = 0x33;
-                                const screen_pos = world_to_screen(location, state.camera_location);
+                                const screen_pos = world_to_screen(location).sub(camera_position);
                                 w4.rect(screen_pos.x, screen_pos.y, tile_px_width, tile_px_height);
                             }
                         },
@@ -124,11 +175,11 @@ pub fn with_data(data: anytype) type {
             }
         }
 
-        pub fn draw_tile_markers(state: anytype) void {
+        pub fn draw_tile_markers(state: anytype, camera_position: ScreenPosition) void {
             var i: usize = 0;
             while (i < state.action_target_count) : (i += 1) {
+                const screen_pos = world_to_screen(state.action_targets[i]).sub(camera_position);
                 w4.DRAW_COLORS.* = 0x4444;
-                const screen_pos = world_to_screen(state.action_targets[i], state.camera_location);
                 w4.line(
                     screen_pos.x,
                     screen_pos.y + tile_px_height / 2 - 1,
@@ -156,7 +207,7 @@ pub fn with_data(data: anytype) type {
             }
         }
 
-        pub fn draw_hud(state: anytype) void {
+        pub fn draw_hud(state: anytype, camera_position: ScreenPosition) void {
             if (state.turn_state == .aim) {
                 w4.DRAW_COLORS.* = 0x04;
 
@@ -167,29 +218,26 @@ pub fn with_data(data: anytype) type {
                 );
 
                 if (state.action_target_count > state.action_target) {
-                    const screen_pos = world_to_screen(
-                        state.action_targets[state.action_target],
-                        state.camera_location,
-                    );
+                    const screen_pos = world_to_screen(state.action_targets[state.action_target]).sub(camera_position);
                     w4.hline(
                         screen_pos.x - 1,
                         screen_pos.y - tile_px_height / 2,
-                        tile_px_width + 1,
+                        tile_px_width + 2,
                     );
                     w4.hline(
                         screen_pos.x - 1,
-                        screen_pos.y + tile_px_height - 2,
-                        tile_px_width + 1,
+                        screen_pos.y + tile_px_height - 1,
+                        tile_px_width + 2,
                     );
                     w4.vline(
                         screen_pos.x - 1,
                         screen_pos.y - tile_px_height / 2,
-                        tile_px_height + tile_px_height / 2 - 1,
+                        tile_px_height + tile_px_height / 2,
                     );
                     w4.vline(
                         screen_pos.x + tile_px_width,
                         screen_pos.y - tile_px_height / 2,
-                        tile_px_height + tile_px_height / 2 - 1,
+                        tile_px_height + tile_px_height / 2,
                     );
                 }
             }

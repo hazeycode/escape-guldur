@@ -56,4 +56,6 @@ export fn update() void {
     };
 
     game.update(&state, input);
+
+    gfx.frame_counter += 1;
 }

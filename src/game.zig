@@ -9,14 +9,22 @@ const Screen = enum { title, controls, game, dead, win };
 
 var screen: Screen = .title;
 var flip_player_sprite = false;
+var move_start_frame: usize = 0;
 
 pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
     return struct {
         const max_player_health = 5;
 
         const Entity = struct {
-            location: world.Location,
+            location: world.Location = world.Location{ .x = 0, .y = 0 },
+            target_location: world.Location = world.Location{ .x = 0, .y = 0 },
             health: i8,
+            state: enum { idle, walk, melee_attack } = .idle,
+
+            pub fn set_location(self: *@This(), location: world.Location) void {
+                self.location = location;
+                self.target_location = location;
+            }
         };
 
         const Player = struct {
@@ -65,10 +73,9 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
         pub const State = struct {
             // timer: std.time.Timer = undefined,
             game_elapsed_ns: u64 = 0,
-            turn_state: enum { ready, aim, response, complete } = .ready,
+            turn_state: enum { ready, aim, commit, response, complete } = .ready,
             turn: u8 = 0,
             level: u8 = 0,
-            camera_location: world.Location = undefined,
             action_target: u8 = 0,
             action_targets: [16]world.Location = undefined,
             action_target_count: u8 = 0,
@@ -122,24 +129,18 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                     while (location.y < world.size_y) : (location.y += 1) {
                         switch (world.map_get_tile_kind(self.world_map, location)) {
                             .player_spawn => {
-                                self.player.entity.location = location;
+                                self.player.entity.set_location(location);
                             },
                             .monster_spawn => {
-                                self.monsters[self.monster_count] = .{
-                                    .entity = .{
-                                        .location = location,
-                                        .health = 2,
-                                    },
-                                };
+                                var monster = &self.monsters[self.monster_count];
+                                monster.entity.set_location(location);
+                                monster.entity.health = 2;
                                 self.monster_count += 1;
                             },
                             .fire_monster_spawn => {
-                                self.fire_monsters[self.fire_monster_count] = .{
-                                    .entity = .{
-                                        .location = location,
-                                        .health = 3,
-                                    },
-                                };
+                                var fire_monster = &self.fire_monsters[self.fire_monster_count];
+                                fire_monster.entity.set_location(location);
+                                fire_monster.entity.health = 3;
                                 self.fire_monster_count += 1;
                             },
                             .health_pickup => self.spawn_pickup(location, .health),
@@ -158,10 +159,8 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
 
                 for (self.pickups) |*pickup| {
                     if (pickup.entity.health == 0) {
-                        pickup.entity = .{
-                            .location = location,
-                            .health = 1,
-                        };
+                        pickup.entity.set_location(location);
+                        pickup.entity.health = 1;
                         pickup.kind = kind;
                         return;
                     }
@@ -188,6 +187,8 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                     }
 
                     if (try_hit_enemy(state, location)) {
+                        state.player.entity.state = .melee_attack;
+                        commit_move(state);
                         break :find_move;
                     }
 
@@ -201,17 +202,13 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                                 .small_axe => state.player.give_item(.small_axe),
                             }
                             pickup.entity.health = 0;
-
                             sfx.pickup();
-
-                            state.player.entity.location = location;
-
-                            commit_move(state);
-                            break :find_move;
+                            break;
                         }
                     }
 
-                    state.player.entity.location = location;
+                    state.player.entity.target_location = location;
+                    state.player.entity.state = .walk;
                     sfx.walk();
                     commit_move(state);
                 },
@@ -223,9 +220,9 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                 if (monster.entity.health > 0 and
                     monster.entity.location.eql(location))
                 {
+                    state.player.entity.target_location = monster.entity.location;
                     monster.entity.health -= state.player.get_damage();
                     sfx.deal_damage();
-                    commit_move(state);
                     return true;
                 }
             }
@@ -234,9 +231,9 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                 if (fire_monster.entity.health > 0 and
                     fire_monster.entity.location.eql(location))
                 {
+                    state.player.entity.target_location = fire_monster.entity.location;
                     fire_monster.entity.health -= state.player.get_damage();
                     sfx.deal_damage();
-                    commit_move(state);
                     return true;
                 }
             }
@@ -330,8 +327,8 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
         fn commit_move(state: *State) void {
             util.trace("commit move");
 
-            // TODO: animate move before state change
-            state.turn_state = .response;
+            move_start_frame = gfx.frame_counter;
+            state.turn_state = .commit;
         }
 
         fn respond_to_move(state: *State) void {
@@ -343,9 +340,6 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                 if (state.player.entity.health < 0) {
                     state.player.entity.health = 0;
                 }
-
-                // TODO: animate response to move before state change
-                state.turn_state = .complete;
             }
 
             if (world.map_get_tile_kind(state.world_map, state.player.entity.location) == .door) {
@@ -376,6 +370,8 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                         util.trace("monster: hit player!");
                         sfx.receive_damage();
                         state.player.entity.health -= 2;
+                        monster.entity.target_location = state.player.entity.location;
+                        monster.entity.state = .melee_attack;
                         break :find_move;
                     } else if (manhattan_dist <= 3) {
                         util.trace("monster: approach player");
@@ -398,7 +394,8 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                         }
 
                         if (test_walkable(state, possible_location)) {
-                            monster.entity.location = possible_location;
+                            monster.entity.target_location = possible_location;
+                            monster.entity.state = .walk;
                             break :find_move;
                         }
                     } else if (manhattan_dist < 10) {
@@ -421,7 +418,8 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                                 for (&possible_locations) |new_location| {
                                     if (test_walkable(state, new_location)) {
                                         if (new_location.manhattan_to(state.player.entity.location) < manhattan_dist) {
-                                            monster.entity.location = new_location;
+                                            monster.entity.target_location = new_location;
+                                            monster.entity.state = .walk;
                                             break;
                                         }
                                     }
@@ -510,6 +508,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                 var new_fire = Enemy{
                     .entity = .{
                         .location = path.locations[0],
+                        .target_location = path.locations[0],
                         .health = 1,
                     },
                 };
@@ -534,7 +533,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
             if (fire.path.length > 0) {
                 util.trace("fire walk path");
 
-                fire.entity.location = fire.path.locations[0];
+                fire.entity.set_location(fire.path.locations[0]);
 
                 if (world.map_get_tile_kind(state.world_map, fire.entity.location) != .wall) {
                     if (fire.entity.location.eql(state.player.entity.location)) {
@@ -569,7 +568,8 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
             };
 
             if (test_walkable(state, location)) {
-                entity.location = location;
+                entity.target_location = location;
+                entity.state = .walk;
             }
         }
 
@@ -654,6 +654,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                                     } else if (target_location.x > state.player.entity.location.x) {
                                         flip_player_sprite = false;
                                     }
+                                    commit_move(state);
                                 },
                             }
                         }
@@ -669,8 +670,51 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                         }
                     }
                 },
+                .commit => {
+                    const animation_frame = gfx.frame_counter - move_start_frame;
+                    if (animation_frame >= gfx.move_animation_frames) {
+                        switch (state.player.entity.state) {
+                            .walk => {
+                                state.player.entity.location = state.player.entity.target_location;
+                            },
+                            else => {
+                                state.player.entity.target_location = state.player.entity.location;
+                            },
+                        }
+                        respond_to_move(state);
+                        state.player.entity.state = .idle;
+                        move_start_frame = gfx.frame_counter;
+                        state.turn_state = .response;
+                    }
+                },
                 .response => {
-                    respond_to_move(state);
+                    const animation_frame = gfx.frame_counter - move_start_frame;
+                    if (animation_frame >= gfx.move_animation_frames) {
+                        for (state.monsters) |*monster| {
+                            switch (monster.entity.state) {
+                                .walk => {
+                                    monster.entity.location = monster.entity.target_location;
+                                },
+                                else => {
+                                    monster.entity.target_location = monster.entity.location;
+                                },
+                            }
+                            monster.entity.state = .idle;
+                        }
+                        for (state.fire_monsters) |*fire_monster| {
+                            switch (fire_monster.entity.state) {
+                                .walk => {
+                                    fire_monster.entity.location = fire_monster.entity.target_location;
+                                },
+                                else => {
+                                    fire_monster.entity.target_location = fire_monster.entity.location;
+                                },
+                            }
+                            fire_monster.entity.location = fire_monster.entity.target_location;
+                            fire_monster.entity.state = .idle;
+                        }
+                        state.turn_state = .complete;
+                    }
                 },
                 .complete => {
                     if (state.player.entity.health <= 0) {
@@ -683,10 +727,28 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                 },
             }
 
+            const animation_frame = switch (state.turn_state) {
+                .commit, .response => gfx.frame_counter - move_start_frame,
+                else => 0,
+            };
+
             // update camera location
-            state.camera_location = state.player.entity.location;
+            var camera_location = state.player.entity.location;
+            var camera_screen_pos = gfx.lerp(
+                camera_location,
+                state.player.entity.target_location,
+                animation_frame,
+                gfx.move_animation_frames,
+            ).sub(.{
+                .x = gfx.screen_px_width / 2,
+                .y = gfx.screen_px_height / 2,
+            });
             if (state.turn_state == .aim and state.action_target_count > 0) {
-                state.camera_location = state.action_targets[state.action_target];
+                camera_location = state.action_targets[state.action_target];
+                camera_screen_pos = gfx.world_to_screen(camera_location).sub(.{
+                    .x = gfx.screen_px_width / 2,
+                    .y = gfx.screen_px_height / 2,
+                });
             }
 
             var sprite_list = gfx.SpriteList{};
@@ -700,6 +762,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                             .texture = data.Texture.monster,
                             .draw_colours = 0x20,
                             .location = monster.entity.location,
+                            .target_location = monster.entity.target_location,
                             .casts_shadow = true,
                         });
                     }
@@ -713,6 +776,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                             .texture = data.Texture.fire_monster,
                             .draw_colours = 0x20,
                             .location = fire_monster.entity.location,
+                            .target_location = fire_monster.entity.target_location,
                             .casts_shadow = true,
                         });
                     }
@@ -733,6 +797,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                         },
                         .draw_colours = 0x40,
                         .location = pickup.entity.location,
+                        .target_location = pickup.entity.target_location,
                         .casts_shadow = true,
                     });
                 }
@@ -743,6 +808,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                     .texture = data.Texture.player,
                     .draw_colours = 0x20,
                     .location = state.player.entity.location,
+                    .target_location = state.player.entity.target_location,
                     .flip_x = flip_player_sprite,
                     .casts_shadow = true,
                 });
@@ -758,6 +824,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                         .texture = data.Texture.fire_big,
                         .draw_colours = 0x40,
                         .location = fire.entity.location,
+                        .target_location = fire.entity.target_location,
                     });
                 }
 
@@ -768,22 +835,23 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                             .texture = data.Texture.fire_small,
                             .draw_colours = 0x40,
                             .location = location,
+                            .target_location = location,
                         });
                     }
                 }
             }
 
-            gfx.draw_world(state);
+            gfx.draw_world(state, camera_screen_pos);
 
-            sprite_list.draw_shadows(state.camera_location);
+            sprite_list.draw_shadows(camera_screen_pos, animation_frame);
 
             if (state.turn_state == .aim) {
-                gfx.draw_tile_markers(state);
+                gfx.draw_tile_markers(state, camera_screen_pos);
             }
 
-            sprite_list.draw(state.camera_location);
+            sprite_list.draw(camera_screen_pos, animation_frame);
 
-            gfx.draw_hud(state);
+            gfx.draw_hud(state, camera_screen_pos);
         }
 
         fn title_screen(state: anytype, input: anytype) void {
