@@ -73,7 +73,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
         pub const State = struct {
             // timer: std.time.Timer = undefined,
             game_elapsed_ns: u64 = 0,
-            turn_state: enum { ready, aim, commit, response, complete } = .ready,
+            turn_state: enum { ready, aim, commit, response } = .ready,
             turn: u8 = 0,
             level: u8 = 0,
             action_target: u8 = 0,
@@ -713,17 +713,15 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                             fire_monster.entity.location = fire_monster.entity.target_location;
                             fire_monster.entity.state = .idle;
                         }
-                        state.turn_state = .complete;
+
+                        if (state.player.entity.health <= 0) {
+                            util.trace("player died");
+                            screen = .dead;
+                            // state.game_elapsed_ns = state.timer.read();
+                        }
+                        state.turn += 1;
+                        state.turn_state = .ready;
                     }
-                },
-                .complete => {
-                    if (state.player.entity.health <= 0) {
-                        util.trace("player died");
-                        screen = .dead;
-                        // state.game_elapsed_ns = state.timer.read();
-                    }
-                    state.turn += 1;
-                    state.turn_state = .ready;
                 },
             }
 
