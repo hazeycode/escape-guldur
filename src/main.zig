@@ -21,12 +21,7 @@ var state = game.State{};
 var prev_gamepad: u8 = 0;
 
 export fn start() void {
-    w4.PALETTE.* = .{ // 2BIT DEMICHROME PALETTE (https://lospec.com/palette-list/2bit-demichrome)
-        0x211e20,
-        0x555568,
-        0xa0a08b,
-        0xe9efec,
-    };
+    gfx.init();
 }
 
 export fn update() void {

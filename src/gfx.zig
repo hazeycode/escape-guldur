@@ -35,6 +35,15 @@ pub fn with_data(data: anytype) type {
             }
         };
 
+        pub fn init() void {
+            w4.PALETTE.* = .{
+                0x211e20,
+                0x494f5b,
+                0x808070,
+                0xe9efec,
+            };
+        }
+
         pub fn world_to_screen(location: world.Location) ScreenPosition {
             return .{
                 .x = location.x * tile_px_width + w4.SCREEN_SIZE / 2,
@@ -311,22 +320,32 @@ pub fn with_data(data: anytype) type {
             // }
         }
 
+        pub fn draw_menu_bg() void {
+            const bg = data.Texture.title_screen_bg;
+            w4.DRAW_COLORS.* = 0x2321;
+            w4.blit(bg.bytes, 0, 0, bg.width, bg.height, w4.BLIT_2BPP);
+        }
+
         pub fn draw_title_menu() void {
+            draw_menu_bg();
+
             w4.DRAW_COLORS.* = 0x04;
-            w4_util.text_centered("Escape Guldur", @divTrunc(w4.SCREEN_SIZE, 3));
+            w4_util.text_centered("Escape Guldur", @divTrunc(w4.SCREEN_SIZE, 2) - 8);
             w4.text("\x80 START", 16, w4.SCREEN_SIZE - (8 + 4) * 2);
             w4.text("\x81 CONTROLS", 16, w4.SCREEN_SIZE - (8 + 4));
         }
 
         pub fn draw_controls() void {
+            draw_menu_bg();
+
             w4.DRAW_COLORS.* = 0x04;
-            w4_util.text_centered("CONTROLS", 2);
-            w4.text("\x84\x85\x86\x87 MOVE /", 10, 40 + (8 + 1) * 0);
-            w4.text("     CHANGE TARGET", 10, 40 + (8 + 1) * 1);
-            w4.text("\x80 AIM ITEM /", 10, 40 + (8 + 1) * 4);
-            w4.text("  USE ITEM", 10, 40 + (8 + 1) * 5);
-            w4.text("\x81 CYCLE ITEM /", 10, 40 + (8 + 1) * 8);
-            w4.text("  CANCEL AIM", 10, 40 + (8 + 1) * 9);
+            w4_util.text_centered("CONTROLS", 12);
+            w4.text("\x84\x85\x86\x87 move /", 10, 50 + (8 + 1) * 0);
+            w4.text("     change target", 10, 50 + (8 + 1) * 1);
+            w4.text("\x80 aim item /", 10, 50 + (8 + 1) * 4);
+            w4.text("  use item", 10, 50 + (8 + 1) * 5);
+            w4.text("\x81 cycle item /", 10, 50 + (8 + 1) * 8);
+            w4.text("  cycle aim", 10, 50 + (8 + 1) * 9);
         }
 
         pub fn draw_text_number(number: i32, x: i32, y: i32) u16 {

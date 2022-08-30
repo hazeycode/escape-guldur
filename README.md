@@ -2,6 +2,8 @@
 
 A retro action-RPG written in [Zig](https://ziglang.org/) for [WASM-4 Jam #2](https://itch.io/jam/wasm4-v2).
 
+![title screen image](assets/images/title_screen_capture.png)
+
 ## Building
 
 #### Requirements
