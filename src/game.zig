@@ -332,23 +332,20 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                     }
                 },
                 .small_axe => { // ranged attack
-                    for (state.monsters) |*monster| {
-                        if (monster.entity.health > 0) {
-                            if (test_can_ranged_attack(state, monster.entity.location)) {
-                                state.action_targets[state.action_target_count] = monster.entity.location;
-                                state.action_target_count += 1;
-                            }
-                        }
-                    }
-                    for (state.fire_monsters) |*monster| {
-                        if (monster.entity.health > 0) {
-                            if (test_can_ranged_attack(state, monster.entity.location)) {
-                                state.action_targets[state.action_target_count] = monster.entity.location;
-                                state.action_target_count += 1;
-                            }
-                        }
-                    }
+                    find_ranged_targets(state, state.monsters);
+                    find_ranged_targets(state, state.fire_monsters);
                 },
+            }
+        }
+
+        fn find_ranged_targets(state: *State, potential_targets: anytype) void {
+            for (potential_targets) |*target| {
+                if (target.entity.health > 0) {
+                    if (test_can_ranged_attack(state, target.entity.location)) {
+                        state.action_targets[state.action_target_count] = target.entity.location;
+                        state.action_target_count += 1;
+                    }
+                }
             }
         }
 
@@ -810,7 +807,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                     if (monster.entity.health > 0 and
                         world.map_get_tile(state.world_vis_map, monster.entity.location) > 0)
                     {
-                        sprite_list.push_sprite(.{
+                        sprite_list.push(.{
                             .texture = data.Texture.monster,
                             .draw_colours = 0x20,
                             .location = monster.entity.location,
@@ -824,7 +821,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                     if (fire_monster.entity.health > 0 and
                         world.map_get_tile(state.world_vis_map, fire_monster.entity.location) > 0)
                     {
-                        sprite_list.push_sprite(.{
+                        sprite_list.push(.{
                             .texture = data.Texture.fire_monster,
                             .draw_colours = 0x20,
                             .location = fire_monster.entity.location,
@@ -841,7 +838,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                     state.world_vis_map,
                     pickup.entity.location,
                 ) > 0) {
-                    sprite_list.push_sprite(.{
+                    sprite_list.push(.{
                         .texture = switch (pickup.kind) {
                             .health => data.Texture.heart,
                             .sword => data.Texture.sword,
@@ -856,7 +853,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
             }
 
             { // draw player
-                sprite_list.push_sprite(.{
+                sprite_list.push(.{
                     .texture = data.Texture.player,
                     .draw_colours = 0x20,
                     .location = state.player.entity.location,
@@ -872,7 +869,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                 }
 
                 if (world.map_get_tile(state.world_vis_map, fire.entity.location) > 0) {
-                    sprite_list.push_sprite(.{
+                    sprite_list.push(.{
                         .texture = data.Texture.fire_big,
                         .draw_colours = 0x40,
                         .location = fire.entity.location,
@@ -883,7 +880,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                 if (fire.path.length > 1) {
                     const location = fire.path.locations[1];
                     if (world.map_get_tile(state.world_vis_map, location) > 0) {
-                        sprite_list.push_sprite(.{
+                        sprite_list.push(.{
                             .texture = data.Texture.fire_small,
                             .draw_colours = 0x40,
                             .location = location,
@@ -895,7 +892,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
 
             gfx.draw_world(state, camera_screen_pos);
 
-            sprite_list.draw_shadows(camera_screen_pos, animation_frame);
+            gfx.draw_shadows(sprite_list, camera_screen_pos, animation_frame);
 
             if (state.turn_state == .aim) {
                 gfx.draw_tile_markers(state, camera_screen_pos);

@@ -80,7 +80,7 @@ pub fn with_data(data: anytype) type {
             entries: [max_sprites]Sprite = undefined,
             entries_count: u32 = 0,
 
-            pub fn push_sprite(self: *@This(), sprite: Sprite) void {
+            pub fn push(self: *@This(), sprite: Sprite) void {
                 if (self.entries_count == max_sprites) {
                     w4.trace("warning: no space for sprite");
                     return;
@@ -99,30 +99,6 @@ pub fn with_data(data: anytype) type {
 
                 self.entries[i] = sprite;
                 self.entries_count += 1;
-            }
-
-            pub fn draw_shadows(
-                self: @This(),
-                camera_position: ScreenPosition,
-                animation_frame: usize,
-            ) void {
-                for (self.entries[0..self.entries_count]) |sprite| {
-                    if (sprite.casts_shadow) {
-                        const screen_pos = lerp(
-                            sprite.location,
-                            sprite.target_location,
-                            animation_frame,
-                            move_animation_frames,
-                        ).sub(camera_position);
-                        w4.DRAW_COLORS.* = 0x11;
-                        w4.oval(
-                            screen_pos.x + 2,
-                            screen_pos.y + tile_px_height / 2,
-                            tile_px_width - 4,
-                            2,
-                        );
-                    }
-                }
             }
 
             pub fn draw(
@@ -151,6 +127,30 @@ pub fn with_data(data: anytype) type {
                 }
             }
         };
+
+        pub fn draw_shadows(
+            sprite_list: SpriteList,
+            camera_position: ScreenPosition,
+            animation_frame: usize,
+        ) void {
+            for (sprite_list.entries[0..sprite_list.entries_count]) |sprite| {
+                if (sprite.casts_shadow) {
+                    const screen_pos = lerp(
+                        sprite.location,
+                        sprite.target_location,
+                        animation_frame,
+                        move_animation_frames,
+                    ).sub(camera_position);
+                    w4.DRAW_COLORS.* = 0x11;
+                    w4.oval(
+                        screen_pos.x + 2,
+                        screen_pos.y + tile_px_height / 2,
+                        tile_px_width - 4,
+                        2,
+                    );
+                }
+            }
+        }
 
         pub fn draw_world(state: anytype, camera_position: ScreenPosition) void {
             var location: world.Location = .{ .x = 0, .y = 0 };
