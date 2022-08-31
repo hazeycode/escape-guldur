@@ -580,7 +580,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                 fire.entity.target_location = fire.path.locations[0];
 
                 if (world.map_get_tile_kind(state.world_map, fire.entity.location) != .wall) {
-                    if (fire.entity.location.eql(state.player.entity.location)) {
+                    if (fire.entity.target_location.eql(state.player.entity.location)) {
                         util.trace("fire hit player!");
                         sfx.receive_damage();
                         state.player.entity.health -= 1;
