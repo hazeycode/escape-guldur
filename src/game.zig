@@ -5,15 +5,59 @@ var rng = std.rand.DefaultPrng.init(42);
 const world = @import("world.zig");
 const WorldMap = world.Map(world.size_x, world.size_y);
 
-const Screen = enum { title, controls, game, dead, win };
-
-var screen: Screen = .title;
-var flip_player_sprite = false;
-var move_start_frame: usize = 0;
-
 pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
     return struct {
-        const max_player_health = 5;
+        const starting_player_health = 5;
+
+        var screen: Screen = .title;
+        var flip_player_sprite = false;
+        var move_start_frame: usize = 0;
+
+        pub var input_queue = struct {
+            inputs: [8]ButtonPressEvent = undefined,
+            count: usize = 0,
+            read_cursor: usize = 0,
+            write_cursor: usize = 0,
+
+            pub fn push(self: *@This(), input: ButtonPressEvent) void {
+                self.inputs[self.write_cursor] = input;
+                self.write_cursor = @mod(self.write_cursor + 1, self.inputs.len);
+                if (self.count == self.inputs.len) {
+                    util.trace("warning: input queue overflow");
+                    self.read_cursor = @mod(self.read_cursor + 1, self.inputs.len);
+                } else {
+                    self.count += 1;
+                }
+            }
+
+            pub fn pop(self: *@This()) ?ButtonPressEvent {
+                if (self.count == 0) {
+                    return null;
+                }
+                defer {
+                    self.read_cursor = @mod(self.read_cursor + 1, self.inputs.len);
+                    self.count -= 1;
+                }
+                return self.inputs[self.read_cursor];
+            }
+        }{};
+
+        pub const ButtonPressEvent = packed struct {
+            left: u1,
+            right: u1,
+            up: u1,
+            down: u1,
+            action_1: u1,
+            action_2: u1,
+            _: u2 = 0,
+
+            pub fn any_pressed(self: @This()) bool {
+                const sum = self.left + self.right + self.up + self.down + self.action_1 + self.action_2;
+                return (sum > 0);
+            }
+        };
+
+        pub const Screen = enum { title, controls, game, dead, win };
 
         const Entity = struct {
             location: world.Location = world.Location{ .x = 0, .y = 0 },
@@ -96,7 +140,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                 // self.timer = std.time.Timer.start() catch @panic("Failed to start timer");
                 self.turn_state = .ready;
                 self.turn = 0;
-                self.player.entity.health = max_player_health;
+                self.player.entity.health = starting_player_health;
                 self.player.active_item = .fists;
                 self.player.items = 0b1;
                 self.action_target_count = 0;
@@ -609,64 +653,72 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
             }
         }
 
-        fn update_and_render_game(state: anytype, input: anytype) void {
+        fn update_and_render_game(state: anytype, newest_input: anytype) void {
             if (state.level == data.levels.len) {
                 screen = .win;
                 // state.game_elapsed_ns = state.timer.read();
                 return;
             }
 
+            if (newest_input.any_pressed()) {
+                input_queue.push(newest_input);
+            }
+
             switch (state.turn_state) {
                 .ready => {
-                    if (input.pressed.action_1 > 0) {
-                        util.trace("aim item");
-                        find_action_targets(state);
-                        state.action_target = 0;
-                        state.turn_state = .aim;
-                    } else if (input.pressed.action_2 > 0) {
-                        try_cycle_item(state);
-                    } else if (input.pressed.up > 0) {
-                        try_move(state, state.player.entity.location.walk(.north));
-                    } else if (input.pressed.right > 0) {
-                        flip_player_sprite = false;
-                        try_move(state, state.player.entity.location.walk(.east));
-                    } else if (input.pressed.down > 0) {
-                        try_move(state, state.player.entity.location.walk(.south));
-                    } else if (input.pressed.left > 0) {
-                        flip_player_sprite = true;
-                        try_move(state, state.player.entity.location.walk(.west));
+                    if (input_queue.pop()) |input| {
+                        if (input.action_1 > 0) {
+                            util.trace("aim item");
+                            find_action_targets(state);
+                            state.action_target = 0;
+                            state.turn_state = .aim;
+                        } else if (input.action_2 > 0) {
+                            try_cycle_item(state);
+                        } else if (input.up > 0) {
+                            try_move(state, state.player.entity.location.walk(.north));
+                        } else if (input.right > 0) {
+                            flip_player_sprite = false;
+                            try_move(state, state.player.entity.location.walk(.east));
+                        } else if (input.down > 0) {
+                            try_move(state, state.player.entity.location.walk(.south));
+                        } else if (input.left > 0) {
+                            flip_player_sprite = true;
+                            try_move(state, state.player.entity.location.walk(.west));
+                        }
                     }
                 },
                 .aim => {
-                    if (input.pressed.action_1 > 0) {
-                        if (state.action_target_count == 0) {
-                            cancel_aim(state);
-                        } else {
-                            util.trace("commit action");
-                            const target_location = state.action_targets[state.action_target];
-                            switch (state.player.active_item) {
-                                .fists, .sword => try_move(state, target_location),
-                                .small_axe => if (try_hit_enemy(state, target_location)) {
-                                    state.player.remove_item(.small_axe);
-                                    state.spawn_pickup(target_location, .small_axe);
-                                    if (target_location.x < state.player.entity.location.x) {
-                                        flip_player_sprite = true;
-                                    } else if (target_location.x > state.player.entity.location.x) {
-                                        flip_player_sprite = false;
-                                    }
-                                    commit_move(state);
-                                },
+                    if (input_queue.pop()) |input| {
+                        if (input.action_1 > 0) {
+                            if (state.action_target_count == 0) {
+                                cancel_aim(state);
+                            } else {
+                                util.trace("commit action");
+                                const target_location = state.action_targets[state.action_target];
+                                switch (state.player.active_item) {
+                                    .fists, .sword => try_move(state, target_location),
+                                    .small_axe => if (try_hit_enemy(state, target_location)) {
+                                        state.player.remove_item(.small_axe);
+                                        state.spawn_pickup(target_location, .small_axe);
+                                        if (target_location.x < state.player.entity.location.x) {
+                                            flip_player_sprite = true;
+                                        } else if (target_location.x > state.player.entity.location.x) {
+                                            flip_player_sprite = false;
+                                        }
+                                        commit_move(state);
+                                    },
+                                }
                             }
-                        }
-                    } else if (input.pressed.action_2 > 0) {
-                        cancel_aim(state);
-                    } else if (state.action_target_count > 0) {
-                        if (input.pressed.up > 0 or input.pressed.right > 0) {
-                            sfx.walk();
-                            state.action_target = if (state.action_target == state.action_target_count - 1) 0 else state.action_target + 1;
-                        } else if (input.pressed.down > 0 or input.pressed.left > 0) {
-                            sfx.walk();
-                            state.action_target = if (state.action_target == 0) state.action_target_count - 1 else state.action_target - 1;
+                        } else if (input.action_2 > 0) {
+                            cancel_aim(state);
+                        } else if (state.action_target_count > 0) {
+                            if (input.up > 0 or input.right > 0) {
+                                sfx.walk();
+                                state.action_target = if (state.action_target == state.action_target_count - 1) 0 else state.action_target + 1;
+                            } else if (input.down > 0 or input.left > 0) {
+                                sfx.walk();
+                                state.action_target = if (state.action_target == 0) state.action_target_count - 1 else state.action_target - 1;
+                            }
                         }
                     }
                 },
@@ -855,13 +907,13 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
         fn title_screen(state: anytype, input: anytype) void {
             gfx.draw_title_menu();
 
-            if (input.pressed.action_1 > 0) {
+            if (input.action_1 > 0) {
                 sfx.walk();
                 screen = .game;
                 state.reset();
                 state.load_level(0);
                 util.trace("start game");
-            } else if (input.pressed.action_2 > 0) {
+            } else if (input.action_2 > 0) {
                 sfx.walk();
                 screen = .controls;
                 util.trace("show controls");
@@ -871,7 +923,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
         fn controls_screen(input: anytype) void {
             gfx.draw_controls();
 
-            if (input.pressed.action_1 + input.pressed.action_2 > 0) {
+            if (input.action_1 + input.action_2 > 0) {
                 sfx.walk();
                 screen = .title;
                 util.trace("return to title screen");
@@ -896,14 +948,14 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                 // .elapsed_s = elapsed_seconds,
             });
 
-            if (input.pressed.action_1 > 0) {
+            if (input.action_1 > 0) {
                 sfx.walk();
                 screen = advance_screen;
                 return;
             }
 
             if (maybe_retreat_screen) |retreat_screen| {
-                if (input.pressed.action_1 > 0) {
+                if (input.action_1 > 0) {
                     sfx.walk();
                     screen = retreat_screen;
                 }
