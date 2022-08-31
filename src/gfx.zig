@@ -1,5 +1,5 @@
 const w4 = @import("wasm4.zig");
-const w4_util = @import("wasm4_util.zig");
+const w4_ext = @import("wasm4_ext.zig");
 
 const std = @import("std");
 
@@ -288,7 +288,7 @@ pub fn with_data(data: anytype) type {
 
         pub fn draw_screen_title(title_text: []const u8) void {
             w4.DRAW_COLORS.* = 0x04;
-            w4_util.text_centered(title_text, @divTrunc(w4.SCREEN_SIZE, 4));
+            w4_ext.text_centered(title_text, @divTrunc(w4.SCREEN_SIZE, 4));
         }
 
         pub fn draw_stats(stats: anytype) void {
@@ -330,7 +330,7 @@ pub fn with_data(data: anytype) type {
             draw_menu_bg();
 
             w4.DRAW_COLORS.* = 0x04;
-            w4_util.text_centered("Escape Guldur", @divTrunc(w4.SCREEN_SIZE, 2) - 8);
+            w4_ext.text_centered("Escape Guldur", @divTrunc(w4.SCREEN_SIZE, 2) - 8);
             w4.text("\x80 START", 16, w4.SCREEN_SIZE - (8 + 4) * 2);
             w4.text("\x81 CONTROLS", 16, w4.SCREEN_SIZE - (8 + 4));
         }
@@ -339,7 +339,7 @@ pub fn with_data(data: anytype) type {
             draw_menu_bg();
 
             w4.DRAW_COLORS.* = 0x04;
-            w4_util.text_centered("CONTROLS", 12);
+            w4_ext.text_centered("CONTROLS", 12);
             w4.text("\x84\x85\x86\x87 move /", 10, 50 + (8 + 1) * 0);
             w4.text("     change target", 10, 50 + (8 + 1) * 1);
             w4.text("\x80 aim item /", 10, 50 + (8 + 1) * 4);

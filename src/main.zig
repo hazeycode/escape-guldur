@@ -1,11 +1,10 @@
 const w4 = @import("wasm4.zig");
-const w4_util = @import("wasm4_util.zig");
 
 const data = @import("data.zig");
 const gfx = @import("gfx.zig").with_data(data);
 const sfx = @import("sfx.zig");
 
-const util = struct {
+const platform = struct {
     pub inline fn trace(str: []const u8) void {
         w4.trace(str);
     }
@@ -15,7 +14,7 @@ const util = struct {
     }
 };
 
-const game = @import("game.zig").Game(gfx, sfx, util, data);
+const game = @import("game.zig").Game(gfx, sfx, platform, data);
 
 var state = game.State{};
 var prev_gamepad: u8 = 0;
