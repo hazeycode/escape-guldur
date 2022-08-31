@@ -577,7 +577,7 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
             if (fire.path.length > 0) {
                 util.trace("fire walk path");
 
-                fire.entity.set_location(fire.path.locations[0]);
+                fire.entity.target_location = fire.path.locations[0];
 
                 if (world.map_get_tile_kind(state.world_map, fire.entity.location) != .wall) {
                     if (fire.entity.location.eql(state.player.entity.location)) {
@@ -762,8 +762,10 @@ pub fn Game(gfx: anytype, sfx: anytype, util: anytype, data: anytype) type {
                                     fire_monster.entity.target_location = fire_monster.entity.location;
                                 },
                             }
-                            fire_monster.entity.location = fire_monster.entity.target_location;
                             fire_monster.entity.state = .idle;
+                        }
+                        for (state.fire) |*fire| {
+                            fire.entity.location = fire.entity.target_location;
                         }
 
                         if (state.player.entity.health <= 0) {
