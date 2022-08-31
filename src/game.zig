@@ -72,6 +72,8 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             location: world.Location = world.Location{ .x = 0, .y = 0 },
             target_location: world.Location = world.Location{ .x = 0, .y = 0 },
             health: i8,
+            pending_damage: u4 = 0,
+            did_receive_damage: bool = false,
             state: enum { idle, walk, melee_attack } = .idle,
 
             pub fn set_location(self: *@This(), location: world.Location) void {
@@ -211,7 +213,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                 platform.trace("spawn pickup");
 
                 for (self.pickups) |*pickup| {
-                    if (pickup.entity.health == 0) {
+                    if (pickup.entity.health <= 0) {
                         pickup.entity.set_location(location);
                         pickup.entity.health = 1;
                         pickup.kind = kind;
@@ -274,8 +276,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                     monster.entity.location.eql(location))
                 {
                     state.player.entity.target_location = monster.entity.location;
-                    monster.entity.health -= state.player.get_damage();
-                    sfx.deal_damage();
+                    monster.entity.pending_damage += state.player.get_damage();
                     return true;
                 }
             }
@@ -285,8 +286,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                     fire_monster.entity.location.eql(location))
                 {
                     state.player.entity.target_location = fire_monster.entity.location;
-                    fire_monster.entity.health -= state.player.get_damage();
-                    sfx.deal_damage();
+                    fire_monster.entity.pending_damage += state.player.get_damage();
                     return true;
                 }
             }
@@ -354,14 +354,12 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                                 return da < db;
                             }
                         }{ .state = state };
-                        platform.trace("quicksort...");
                         quicksort(
                             targets,
                             0,
                             @intCast(isize, targets.len - 1),
                             distance_comparitor,
                         );
-                        platform.trace("sorted");
                     }
                 },
             }
@@ -406,10 +404,6 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
             defer {
                 update_world_lightmap(state);
-
-                if (state.player.entity.health < 0) {
-                    state.player.entity.health = 0;
-                }
             }
 
             if (world.map_get_tile_kind(state.world_map, state.player.entity.location) == .door) {
@@ -438,8 +432,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
                     if (manhattan_dist == 1) {
                         platform.trace("monster: hit player!");
-                        sfx.receive_damage();
-                        state.player.entity.health -= 2;
+                        state.player.entity.pending_damage += 2;
                         monster.entity.target_location = state.player.entity.location;
                         monster.entity.state = .melee_attack;
                         break :find_move;
@@ -608,8 +601,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                 if (world.map_get_tile_kind(state.world_map, fire.entity.location) != .wall) {
                     if (fire.entity.target_location.eql(state.player.entity.location)) {
                         platform.trace("fire hit player!");
-                        sfx.receive_damage();
-                        state.player.entity.health -= 1;
+                        state.player.entity.pending_damage += 1;
                     }
                 }
 
@@ -759,6 +751,23 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                                 state.player.entity.target_location = state.player.entity.location;
                             },
                         }
+                        for (state.monsters) |*monster| {
+                            if (monster.entity.pending_damage > 0) {
+                                monster.entity.health -= monster.entity.pending_damage;
+                                monster.entity.pending_damage = 0;
+                                monster.entity.did_receive_damage = true;
+                                sfx.deal_damage();
+                            }
+                        }
+                        for (state.fire_monsters) |*monster| {
+                            if (monster.entity.pending_damage > 0) {
+                                monster.entity.health -= monster.entity.pending_damage;
+                                monster.entity.pending_damage = 0;
+                                monster.entity.did_receive_damage = true;
+                                sfx.deal_damage();
+                            }
+                        }
+
                         respond_to_move(state);
                         state.player.entity.state = .idle;
                         move_start_frame = gfx.frame_counter;
@@ -792,6 +801,13 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                         }
                         for (state.fire) |*fire| {
                             fire.entity.location = fire.entity.target_location;
+                        }
+
+                        if (state.player.entity.pending_damage > 0) {
+                            state.player.entity.health -= state.player.entity.pending_damage;
+                            state.player.entity.pending_damage = 0;
+                            state.player.entity.did_receive_damage = true;
+                            sfx.receive_damage();
                         }
 
                         if (state.player.entity.health <= 0) {
@@ -838,7 +854,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                     {
                         sprite_list.push(.{
                             .texture = data.Texture.monster,
-                            .draw_colours = 0x20,
+                            .draw_colours = if (monster.entity.did_receive_damage) 0x40 else 0x20,
                             .location = monster.entity.location,
                             .target_location = monster.entity.target_location,
                             .casts_shadow = true,
@@ -852,7 +868,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                     {
                         sprite_list.push(.{
                             .texture = data.Texture.fire_monster,
-                            .draw_colours = 0x20,
+                            .draw_colours = if (fire_monster.entity.did_receive_damage) 0x40 else 0x20,
                             .location = fire_monster.entity.location,
                             .target_location = fire_monster.entity.target_location,
                             .casts_shadow = true,
@@ -884,7 +900,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             { // draw player
                 sprite_list.push(.{
                     .texture = data.Texture.player,
-                    .draw_colours = 0x20,
+                    .draw_colours = if (state.player.entity.did_receive_damage) 0x40 else 0x20,
                     .location = state.player.entity.location,
                     .target_location = state.player.entity.target_location,
                     .flip_x = flip_player_sprite,
@@ -893,7 +909,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             }
 
             for (state.fire) |*fire| {
-                if (fire.entity.health == 0) {
+                if (fire.entity.health <= 0) {
                     continue;
                 }
 
@@ -930,6 +946,16 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             sprite_list.draw(camera_screen_pos, animation_frame);
 
             gfx.draw_hud(state, camera_screen_pos);
+
+            {
+                state.player.entity.did_receive_damage = false;
+                for (state.monsters) |*monster| {
+                    monster.entity.did_receive_damage = false;
+                }
+                for (state.fire_monsters) |*monster| {
+                    monster.entity.did_receive_damage = false;
+                }
+            }
         }
 
         fn title_screen(state: anytype, input: anytype) void {
