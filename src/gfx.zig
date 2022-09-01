@@ -16,7 +16,7 @@ pub fn with_data(data: anytype) type {
 
         pub var frame_counter: usize = 0;
 
-        const ScreenPosition = struct {
+        pub const ScreenPosition = struct {
             x: i32,
             y: i32,
 

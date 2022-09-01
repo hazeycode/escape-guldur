@@ -15,7 +15,9 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
         var screen: Screen = .title;
         var flip_player_sprite = false;
-        var move_start_frame: usize = 0;
+        var anim_start_frame: usize = 0;
+        var camera_location: world.Location = undefined;
+        var camera_screen_pos: gfx.ScreenPosition = undefined;
 
         pub var input_queue = struct {
             inputs: [8]ButtonPressEvent = undefined,
@@ -404,7 +406,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
         fn commit_move(state: *State) void {
             platform.trace("commit move");
 
-            move_start_frame = gfx.frame_counter;
+            anim_start_frame = gfx.frame_counter;
             state.turn_state = .commit;
         }
 
@@ -648,6 +650,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             platform.trace("cancel item");
             state.turn_state = .ready;
             state.action_target = 0;
+            state.action_targets.clear();
         }
 
         pub fn update(state: anytype, input: anytype) void {
@@ -681,6 +684,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                             };
                             state.action_target = 0;
                             state.turn_state = .aim;
+                            anim_start_frame = gfx.frame_counter;
                         } else if (input.action_2 > 0) {
                             try_cycle_item(state);
                         } else if (input.up > 0) {
@@ -730,19 +734,21 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                                     u8,
                                     if (state.action_target == state.action_targets.count - 1) 0 else state.action_target + 1,
                                 );
+                                anim_start_frame = gfx.frame_counter;
                             } else if (input.down > 0 or input.left > 0) {
                                 sfx.walk();
                                 state.action_target = @intCast(
                                     u8,
                                     if (state.action_target == 0) state.action_targets.count - 1 else state.action_target - 1,
                                 );
+                                anim_start_frame = gfx.frame_counter;
                             }
                         }
                     }
                 },
                 .commit => {
-                    const animation_frame = gfx.frame_counter - move_start_frame;
-                    if (animation_frame >= gfx.move_animation_frames) {
+                    const animation_frame = gfx.frame_counter - anim_start_frame;
+                    if (animation_frame > gfx.move_animation_frames) {
                         switch (state.player.entity.state) {
                             .walk => {
                                 state.player.entity.location = state.player.entity.target_location;
@@ -770,13 +776,13 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
                         respond_to_move(state);
                         state.player.entity.state = .idle;
-                        move_start_frame = gfx.frame_counter;
+                        anim_start_frame = gfx.frame_counter;
                         state.turn_state = .response;
                     }
                 },
                 .response => {
-                    const animation_frame = gfx.frame_counter - move_start_frame;
-                    if (animation_frame >= gfx.move_animation_frames) {
+                    const animation_frame = gfx.frame_counter - anim_start_frame;
+                    if (animation_frame > gfx.move_animation_frames) {
                         for (state.monsters) |*monster| {
                             switch (monster.entity.state) {
                                 .walk => {
@@ -822,27 +828,41 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             }
 
             const animation_frame = switch (state.turn_state) {
-                .commit, .response => gfx.frame_counter - move_start_frame,
+                .aim, .commit, .response => gfx.frame_counter - anim_start_frame,
                 else => 0,
             };
 
             // update camera location
-            var camera_location = state.player.entity.location;
-            var camera_screen_pos = gfx.lerp(
-                camera_location,
-                state.player.entity.target_location,
-                animation_frame,
-                gfx.move_animation_frames,
-            ).sub(.{
-                .x = gfx.screen_px_width / 2,
-                .y = gfx.screen_px_height / 2,
-            });
             if (state.turn_state == .aim and state.action_targets.count > 0) {
-                camera_location = state.action_targets.get(state.action_target) catch {
-                    platform.trace("error: failed to get action target");
-                    unreachable;
-                };
-                camera_screen_pos = gfx.world_to_screen(camera_location).sub(.{
+                // move to aim taret
+                if (animation_frame <= gfx.move_animation_frames) {
+                    camera_screen_pos = gfx.lerp(
+                        camera_location,
+                        state.action_targets.get(state.action_target) catch {
+                            platform.trace("error: failed to get action target");
+                            unreachable;
+                        },
+                        animation_frame,
+                        gfx.move_animation_frames,
+                    ).sub(.{
+                        .x = gfx.screen_px_width / 2,
+                        .y = gfx.screen_px_height / 2,
+                    });
+                } else {
+                    camera_location = state.action_targets.get(state.action_target) catch {
+                        platform.trace("error: failed to get action target");
+                        unreachable;
+                    };
+                }
+            } else {
+                // follow player
+                camera_location = state.player.entity.location;
+                camera_screen_pos = gfx.lerp(
+                    camera_location,
+                    state.player.entity.target_location,
+                    animation_frame,
+                    gfx.move_animation_frames,
+                ).sub(.{
                     .x = gfx.screen_px_width / 2,
                     .y = gfx.screen_px_height / 2,
                 });
