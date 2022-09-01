@@ -224,39 +224,39 @@ pub fn with_data(data: anytype) type {
             if (state.turn_state == .aim) {
                 w4.DRAW_COLORS.* = 0x04;
 
-                w4.text(
-                    if (state.action_targets.count == 0) "NO TARGETS" else "AIM",
-                    1,
-                    w4.SCREEN_SIZE - (8 + 1) * 2,
-                );
+                if (state.action_targets.count == 0) {
+                    w4.text("NO TARGETS", 1, w4.SCREEN_SIZE - (8 + 1) * 2);
+                } else {
+                    w4.text("AIM", 1, w4.SCREEN_SIZE - (8 + 1) * 2);
 
-                const active_target = state.action_targets.get(state.action_target) catch {
-                    w4.trace("error: failed to get active action target");
-                    unreachable;
-                };
+                    const active_target = state.action_targets.get(state.action_target) catch {
+                        w4.trace("error: failed to get active action target");
+                        unreachable;
+                    };
 
-                const screen_pos = world_to_screen(active_target).sub(camera_position);
+                    const screen_pos = world_to_screen(active_target).sub(camera_position);
 
-                w4.hline(
-                    screen_pos.x - 1,
-                    screen_pos.y - tile_px_height / 2,
-                    tile_px_width + 2,
-                );
-                w4.hline(
-                    screen_pos.x - 1,
-                    screen_pos.y + tile_px_height - 1,
-                    tile_px_width + 2,
-                );
-                w4.vline(
-                    screen_pos.x - 1,
-                    screen_pos.y - tile_px_height / 2,
-                    tile_px_height + tile_px_height / 2,
-                );
-                w4.vline(
-                    screen_pos.x + tile_px_width,
-                    screen_pos.y - tile_px_height / 2,
-                    tile_px_height + tile_px_height / 2,
-                );
+                    w4.hline(
+                        screen_pos.x - 1,
+                        screen_pos.y - tile_px_height / 2,
+                        tile_px_width + 2,
+                    );
+                    w4.hline(
+                        screen_pos.x - 1,
+                        screen_pos.y + tile_px_height - 1,
+                        tile_px_width + 2,
+                    );
+                    w4.vline(
+                        screen_pos.x - 1,
+                        screen_pos.y - tile_px_height / 2,
+                        tile_px_height + tile_px_height / 2,
+                    );
+                    w4.vline(
+                        screen_pos.x + tile_px_width,
+                        screen_pos.y - tile_px_height / 2,
+                        tile_px_height + tile_px_height / 2,
+                    );
+                }
             }
 
             { // draw health bar

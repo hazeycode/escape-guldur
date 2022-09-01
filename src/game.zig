@@ -647,6 +647,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
         fn cancel_aim(state: *State) void {
             platform.trace("cancel item");
             state.turn_state = .ready;
+            state.action_target = 0;
         }
 
         pub fn update(state: anytype, input: anytype) void {
