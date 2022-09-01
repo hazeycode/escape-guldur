@@ -4,6 +4,7 @@ var rng = std.rand.DefaultPrng.init(42);
 
 const util = @import("util.zig");
 const quicksort = util.quicksort;
+const StaticList = util.StaticList;
 
 const world = @import("world.zig");
 const WorldMap = world.Map(world.size_x, world.size_y);
@@ -132,8 +133,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             turn: u8 = 0,
             level: u8 = 0,
             action_target: u8 = 0,
-            action_targets: [16]world.Location = undefined,
-            action_target_count: u8 = 0,
+            action_targets: StaticList(world.Location, 16) = .{},
             world_map: WorldMap = undefined,
             world_vis_map: WorldMap = undefined,
             player: Player = undefined,
@@ -141,10 +141,6 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             fire_monsters: [8]Enemy = undefined,
             fire: [16]Enemy = undefined,
             pickups: [8]Pickup = undefined,
-            monster_count: u8 = 0,
-            fire_monster_count: u8 = 0,
-            fire_count: u8 = 0,
-            pickup_count: u8 = 0,
 
             pub fn reset(self: *@This()) void {
                 platform.trace("reset");
@@ -154,30 +150,25 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                 self.player.entity.health = starting_player_health;
                 self.player.active_item = .fists;
                 self.player.items = 0b1;
-                self.action_target_count = 0;
+                self.action_targets.clear();
             }
 
             pub fn load_level(self: *@This(), level: u8) void {
                 platform.trace("load_level");
 
                 self.turn_state = .ready;
-                self.action_target_count = 0;
+                self.action_targets.clear();
 
                 self.level = level;
                 self.world_map = @bitCast(WorldMap, data.levels[level]);
 
+                // reset entity pools
                 for (self.monsters) |*monster| monster.entity.health = 0;
-                self.monster_count = 0;
-
                 for (self.fire_monsters) |*fire_monster| fire_monster.entity.health = 0;
-                self.fire_monster_count = 0;
-
                 for (self.fire) |*fire| fire.entity.health = 0;
-                self.fire_count = 0;
-
                 for (self.pickups) |*pickup| pickup.entity.health = 0;
-                self.pickup_count = 0;
 
+                // find spawners on level map and spawn things at those locations
                 var location: world.Location = .{ .x = 0, .y = 0 };
                 while (location.x < world.size_x) : (location.x += 1) {
                     defer location.y = 0;
@@ -186,21 +177,11 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                             .player_spawn => {
                                 self.player.entity.set_location(location);
                             },
-                            .monster_spawn => {
-                                var monster = &self.monsters[self.monster_count];
-                                monster.entity.set_location(location);
-                                monster.entity.health = 2;
-                                self.monster_count += 1;
-                            },
-                            .fire_monster_spawn => {
-                                var fire_monster = &self.fire_monsters[self.fire_monster_count];
-                                fire_monster.entity.set_location(location);
-                                fire_monster.entity.health = 3;
-                                self.fire_monster_count += 1;
-                            },
-                            .health_pickup => self.spawn_pickup(location, .health),
-                            .sword_pickup => self.spawn_pickup(location, .sword),
-                            .small_axe_pickup => self.spawn_pickup(location, .small_axe),
+                            .monster_spawn => spawn_enemy(&self.monsters, location, 2),
+                            .fire_monster_spawn => spawn_enemy(&self.fire_monsters, location, 3),
+                            .health_pickup => spawn_pickup(self, location, .health),
+                            .sword_pickup => spawn_pickup(self, location, .sword),
+                            .small_axe_pickup => spawn_pickup(self, location, .small_axe),
                             else => {},
                         }
                     }
@@ -208,20 +189,51 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
                 update_world_lightmap(self);
             }
+        };
 
-            fn spawn_pickup(self: *@This(), location: world.Location, kind: anytype) void {
-                platform.trace("spawn pickup");
-
-                for (self.pickups) |*pickup| {
-                    if (pickup.entity.health <= 0) {
-                        pickup.entity.set_location(location);
-                        pickup.entity.health = 1;
-                        pickup.kind = kind;
-                        return;
-                    }
+        fn spawn_enemy(pool: anytype, location: world.Location, health: u4) void {
+            for (pool) |*enemy| {
+                if (enemy.entity.health <= 0) {
+                    enemy.entity.set_location(location);
+                    enemy.entity.health = health;
+                    platform.trace("spawned enemy");
+                    return;
                 }
             }
-        };
+            platform.trace("warning: enemy not spawned. no free space");
+        }
+
+        fn spawn_pickup(state: *State, location: world.Location, kind: anytype) void {
+            for (state.pickups) |*pickup| {
+                if (pickup.entity.health <= 0) {
+                    pickup.entity.set_location(location);
+                    pickup.entity.health = 1;
+                    pickup.kind = kind;
+                    platform.trace("spawned pickup");
+                    return;
+                }
+            }
+            platform.trace("warning: pickup not spawned. no free space");
+        }
+
+        fn spawn_fire(state: *State, path: world.Path) void {
+            for (state.fire) |*fire| {
+                if (fire.entity.health <= 0) {
+                    fire.entity = .{
+                        .location = path.locations[0],
+                        .target_location = path.locations[0],
+                        .health = 1,
+                    };
+                    fire.path.length = if (path.length <= 1) 0 else path.length - 1;
+                    if (fire.path.length > 0) {
+                        std.mem.copy(world.Location, fire.path.locations[0..], path.locations[1..]);
+                    }
+                    platform.trace("spawned fire");
+                    return;
+                }
+            }
+            platform.trace("warning: fire not spawned. no free space");
+        }
 
         fn try_move(state: *State, location: world.Location) void {
             switch (world.map_get_tile_kind(state.world_map, location)) {
@@ -313,8 +325,8 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             }
         }
 
-        fn find_action_targets(state: *State) void {
-            state.action_target_count = 0;
+        fn find_action_targets(state: *State) !void {
+            state.action_targets.clear();
 
             switch (state.player.active_item) {
                 .fists, .sword => { // melee
@@ -327,25 +339,23 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                         if (world.map_get_tile_kind(state.world_map, location) != .wall) {
                             for (state.monsters) |*monster| {
                                 if (monster.entity.health > 0 and monster.entity.location.eql(location)) {
-                                    state.action_targets[state.action_target_count] = monster.entity.location;
-                                    state.action_target_count += 1;
+                                    try state.action_targets.push(monster.entity.location);
                                 }
                             }
                             for (state.fire_monsters) |*monster| {
                                 if (monster.entity.health > 0 and monster.entity.location.eql(location)) {
-                                    state.action_targets[state.action_target_count] = monster.entity.location;
-                                    state.action_target_count += 1;
+                                    try state.action_targets.push(monster.entity.location);
                                 }
                             }
                         }
                     }
                 },
                 .small_axe => { // ranged attack
-                    find_ranged_targets(state, state.monsters);
-                    find_ranged_targets(state, state.fire_monsters);
+                    try find_ranged_targets(state, state.monsters);
+                    try find_ranged_targets(state, state.fire_monsters);
 
-                    if (state.action_target_count > 1) {
-                        const targets = state.action_targets[0..state.action_target_count];
+                    if (state.action_targets.count > 1) {
+                        const targets = state.action_targets.all();
                         var distance_comparitor = struct {
                             state: *State,
                             pub fn compare(self: @This(), a: world.Location, b: world.Location) bool {
@@ -365,12 +375,11 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             }
         }
 
-        fn find_ranged_targets(state: *State, potential_targets: anytype) void {
+        fn find_ranged_targets(state: *State, potential_targets: anytype) !void {
             for (potential_targets) |*target| {
                 if (target.entity.health > 0) {
                     if (test_can_ranged_attack(state, target.entity.location)) {
-                        state.action_targets[state.action_target_count] = target.entity.location;
-                        state.action_target_count += 1;
+                        try state.action_targets.push(target.entity.location);
                     }
                 }
             }
@@ -564,26 +573,6 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             return walkable;
         }
 
-        fn spawn_fire(state: *State, path: world.Path) void {
-            platform.trace("spawn fire");
-
-            if (state.fire_count < state.fire.len) {
-                var new_fire = Enemy{
-                    .entity = .{
-                        .location = path.locations[0],
-                        .target_location = path.locations[0],
-                        .health = 1,
-                    },
-                };
-                new_fire.path.length = if (path.length <= 1) 0 else path.length - 1;
-                if (new_fire.path.length > 0) {
-                    std.mem.copy(world.Location, new_fire.path.locations[0..], path.locations[1..]);
-                }
-                state.fire[state.fire_count] = new_fire;
-                state.fire_count += 1;
-            }
-        }
-
         fn update_fire(state: *State, fire: *Enemy) void {
             platform.trace("update fire");
 
@@ -610,7 +599,6 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
             fire.entity.health = 0;
             fire.path.length = 0;
-            state.fire_count -= 1;
 
             platform.trace("fire extinguished");
         }
@@ -687,7 +675,9 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                     if (input_queue.pop()) |input| {
                         if (input.action_1 > 0) {
                             platform.trace("aim item");
-                            find_action_targets(state);
+                            find_action_targets(state) catch {
+                                platform.trace("error: failed to find action targets");
+                            };
                             state.action_target = 0;
                             state.turn_state = .aim;
                         } else if (input.action_2 > 0) {
@@ -708,16 +698,19 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                 .aim => {
                     if (input_queue.pop()) |input| {
                         if (input.action_1 > 0) {
-                            if (state.action_target_count == 0) {
+                            if (state.action_targets.count == 0) {
                                 cancel_aim(state);
                             } else {
                                 platform.trace("commit action");
-                                const target_location = state.action_targets[state.action_target];
+                                const target_location = state.action_targets.get(state.action_target) catch {
+                                    platform.trace("error: failed to get action target");
+                                    unreachable;
+                                };
                                 switch (state.player.active_item) {
                                     .fists, .sword => try_move(state, target_location),
                                     .small_axe => if (try_hit_enemy(state, target_location)) {
                                         state.player.remove_item(.small_axe);
-                                        state.spawn_pickup(target_location, .small_axe);
+                                        spawn_pickup(state, target_location, .small_axe);
                                         if (target_location.x < state.player.entity.location.x) {
                                             flip_player_sprite = true;
                                         } else if (target_location.x > state.player.entity.location.x) {
@@ -729,13 +722,19 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                             }
                         } else if (input.action_2 > 0) {
                             cancel_aim(state);
-                        } else if (state.action_target_count > 0) {
+                        } else if (state.action_targets.count > 0) {
                             if (input.up > 0 or input.right > 0) {
                                 sfx.walk();
-                                state.action_target = if (state.action_target == state.action_target_count - 1) 0 else state.action_target + 1;
+                                state.action_target = @intCast(
+                                    u8,
+                                    if (state.action_target == state.action_targets.count - 1) 0 else state.action_target + 1,
+                                );
                             } else if (input.down > 0 or input.left > 0) {
                                 sfx.walk();
-                                state.action_target = if (state.action_target == 0) state.action_target_count - 1 else state.action_target - 1;
+                                state.action_target = @intCast(
+                                    u8,
+                                    if (state.action_target == 0) state.action_targets.count - 1 else state.action_target - 1,
+                                );
                             }
                         }
                     }
@@ -837,8 +836,11 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                 .x = gfx.screen_px_width / 2,
                 .y = gfx.screen_px_height / 2,
             });
-            if (state.turn_state == .aim and state.action_target_count > 0) {
-                camera_location = state.action_targets[state.action_target];
+            if (state.turn_state == .aim and state.action_targets.count > 0) {
+                camera_location = state.action_targets.get(state.action_target) catch {
+                    platform.trace("error: failed to get action target");
+                    unreachable;
+                };
                 camera_screen_pos = gfx.world_to_screen(camera_location).sub(.{
                     .x = gfx.screen_px_width / 2,
                     .y = gfx.screen_px_height / 2,

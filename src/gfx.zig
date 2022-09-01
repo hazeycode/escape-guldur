@@ -186,8 +186,12 @@ pub fn with_data(data: anytype) type {
 
         pub fn draw_tile_markers(state: anytype, camera_position: ScreenPosition) void {
             var i: usize = 0;
-            while (i < state.action_target_count) : (i += 1) {
-                const screen_pos = world_to_screen(state.action_targets[i]).sub(camera_position);
+            while (i < state.action_targets.count) : (i += 1) {
+                const target = state.action_targets.get(i) catch {
+                    w4.tracef("error: failed to get action target %d", i);
+                    unreachable;
+                };
+                const screen_pos = world_to_screen(target).sub(camera_position);
                 w4.DRAW_COLORS.* = 0x4444;
                 w4.line(
                     screen_pos.x,
@@ -221,34 +225,38 @@ pub fn with_data(data: anytype) type {
                 w4.DRAW_COLORS.* = 0x04;
 
                 w4.text(
-                    if (state.action_target_count == 0) "NO TARGETS" else "AIM",
+                    if (state.action_targets.count == 0) "NO TARGETS" else "AIM",
                     1,
                     w4.SCREEN_SIZE - (8 + 1) * 2,
                 );
 
-                if (state.action_target_count > state.action_target) {
-                    const screen_pos = world_to_screen(state.action_targets[state.action_target]).sub(camera_position);
-                    w4.hline(
-                        screen_pos.x - 1,
-                        screen_pos.y - tile_px_height / 2,
-                        tile_px_width + 2,
-                    );
-                    w4.hline(
-                        screen_pos.x - 1,
-                        screen_pos.y + tile_px_height - 1,
-                        tile_px_width + 2,
-                    );
-                    w4.vline(
-                        screen_pos.x - 1,
-                        screen_pos.y - tile_px_height / 2,
-                        tile_px_height + tile_px_height / 2,
-                    );
-                    w4.vline(
-                        screen_pos.x + tile_px_width,
-                        screen_pos.y - tile_px_height / 2,
-                        tile_px_height + tile_px_height / 2,
-                    );
-                }
+                const active_target = state.action_targets.get(state.action_target) catch {
+                    w4.trace("error: failed to get active action target");
+                    unreachable;
+                };
+
+                const screen_pos = world_to_screen(active_target).sub(camera_position);
+
+                w4.hline(
+                    screen_pos.x - 1,
+                    screen_pos.y - tile_px_height / 2,
+                    tile_px_width + 2,
+                );
+                w4.hline(
+                    screen_pos.x - 1,
+                    screen_pos.y + tile_px_height - 1,
+                    tile_px_width + 2,
+                );
+                w4.vline(
+                    screen_pos.x - 1,
+                    screen_pos.y - tile_px_height / 2,
+                    tile_px_height + tile_px_height / 2,
+                );
+                w4.vline(
+                    screen_pos.x + tile_px_width,
+                    screen_pos.y - tile_px_height / 2,
+                    tile_px_height + tile_px_height / 2,
+                );
             }
 
             { // draw health bar

@@ -1,9 +1,30 @@
 const std = @import("std");
 
-pub fn swap(values: anytype, i: usize, j: usize) void {
-    const temp = values[i];
-    values[i] = values[j];
-    values[j] = temp;
+pub fn StaticList(comptime ElementType: type, comptime max_count: usize) type {
+    return struct {
+        elements: [max_count]ElementType = undefined,
+        count: usize = 0,
+
+        pub fn push(self: *@This(), element: ElementType) !void {
+            if (self.count >= max_count) return error.NoSpaceLeft;
+            self.elements[self.count] = element;
+            self.count += 1;
+        }
+
+        pub fn clear(self: *@This()) void {
+            self.elements = std.mem.zeroes(@TypeOf(self.elements));
+            self.count = 0;
+        }
+
+        pub inline fn get(self: *@This(), index: usize) !ElementType {
+            if (index >= self.count) return error.InvalidElementAtIndex;
+            return self.elements[index];
+        }
+
+        pub inline fn all(self: *@This()) []ElementType {
+            return self.elements[0..self.count];
+        }
+    };
 }
 
 pub fn quicksort(
@@ -36,6 +57,12 @@ fn partition(
     i += 1;
     swap(values, @intCast(usize, i), @intCast(usize, high));
     return i;
+}
+
+fn swap(values: anytype, i: usize, j: usize) void {
+    const temp = values[i];
+    values[i] = values[j];
+    values[j] = temp;
 }
 
 const testing = std.testing;
