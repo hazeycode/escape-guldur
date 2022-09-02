@@ -34,3 +34,10 @@ and remember to test it with:
 ```shell
 w4 run zig-out/lib/opt.wasm
 ```
+
+## Distribution
+
+```shell
+w4 bundle zig-out/lib/opt.wasm --title "Escape Guldur" --html index.html
+
+```
