@@ -653,6 +653,17 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             state.action_targets.clear();
         }
 
+        fn entities_apply_pending_damage(pool: anytype) void {
+            for (pool) |*e| {
+                if (e.entity.pending_damage > 0) {
+                    e.entity.health -= e.entity.pending_damage;
+                    e.entity.pending_damage = 0;
+                    e.entity.did_receive_damage = true;
+                    sfx.deal_damage();
+                }
+            }
+        }
+
         pub fn update(state: anytype, input: anytype) void {
             switch (screen) {
                 .title => title_screen(state, input),
@@ -757,22 +768,9 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                                 state.player.entity.target_location = state.player.entity.location;
                             },
                         }
-                        for (state.monsters) |*monster| {
-                            if (monster.entity.pending_damage > 0) {
-                                monster.entity.health -= monster.entity.pending_damage;
-                                monster.entity.pending_damage = 0;
-                                monster.entity.did_receive_damage = true;
-                                sfx.deal_damage();
-                            }
-                        }
-                        for (state.fire_monsters) |*monster| {
-                            if (monster.entity.pending_damage > 0) {
-                                monster.entity.health -= monster.entity.pending_damage;
-                                monster.entity.pending_damage = 0;
-                                monster.entity.did_receive_damage = true;
-                                sfx.deal_damage();
-                            }
-                        }
+
+                        entities_apply_pending_damage(&state.monsters);
+                        entities_apply_pending_damage(&state.fire_monsters);
 
                         respond_to_move(state);
                         state.player.entity.state = .idle;
@@ -834,7 +832,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
             // update camera location
             if (state.turn_state == .aim and state.action_targets.count > 0) {
-                // move to aim taret
+                // move to aim target
                 if (animation_frame <= gfx.move_animation_frames) {
                     camera_screen_pos = gfx.lerp(
                         camera_location,
