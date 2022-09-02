@@ -132,7 +132,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             // timer: std.time.Timer = undefined,
             game_elapsed_ns: u64 = 0,
             turn_state: enum { ready, aim, commit, response } = .ready,
-            turn: u8 = 0,
+            turn: u32 = 0,
             level: u8 = 0,
             action_target: u8 = 0,
             action_targets: StaticList(world.Location, 16) = .{},

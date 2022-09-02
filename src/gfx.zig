@@ -3,6 +3,10 @@ const w4_ext = @import("wasm4_ext.zig");
 
 const std = @import("std");
 
+const util = @import("util.zig");
+const count_digits_fast = util.count_digits_fast;
+const NumberDigitIterator = util.NumberDigitIterator;
+
 const world = @import("world.zig");
 
 pub fn with_data(data: anytype) type {
@@ -356,45 +360,25 @@ pub fn with_data(data: anytype) type {
             w4.text("  cancel aim", 10, 50 + (8 + 1) * 9);
         }
 
-        pub fn draw_text_number(number: i32, x: i32, y: i32) u16 {
+        pub fn draw_text_number(number: anytype, x: i32, y: i32) u16 {
             var dx: u16 = 0;
 
             if (number < 0) {
                 w4.text("-", x + dx, y);
             }
 
-            const number_abs = @intCast(u16, if (number < 0) -number else number);
+            const number_abs = @intCast(
+                u32,
+                if (number < 0) -number else number,
+            );
 
-            const num_digits = count_digits_fast(number_abs);
-
-            var i: u16 = num_digits;
-            var n = number_abs;
-            var m: u16 = 0;
-            while (i > 0) : (i -= 1) {
+            var digit_iter = NumberDigitIterator(u32).init(number_abs);
+            while (digit_iter.next()) |digit| {
                 dx += 8;
-
-                n = @divTrunc(number_abs - m, std.math.pow(u16, 10, i - 1));
-                m += n * std.math.pow(u16, 10, i - 1);
-
-                const digit = '0' + @truncate(u8, n);
-                w4.text(&[_]u8{digit}, x + dx, y);
-
-                if (n == 0) break;
+                w4.text(&[_]u8{'0' + digit}, x + dx, y);
             }
 
             return dx;
         }
     };
-}
-
-fn count_digits_fast(number: i32) u16 {
-    const n = if (number < 0) -number else number;
-    return @as(u16, switch (n) {
-        0...9 => 1,
-        10...99 => 2,
-        100...999 => 3,
-        1000...9999 => 4,
-        10000...99999 => 5,
-        else => unreachable,
-    }) + @as(u16, if (number < 0) 1 else 0);
 }

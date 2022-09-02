@@ -65,6 +65,52 @@ fn swap(values: anytype, i: usize, j: usize) void {
     values[j] = temp;
 }
 
+pub fn NumberDigitIterator(comptime T: type) type {
+    return struct {
+        number: T,
+        n: T,
+        m: T,
+        i: usize,
+
+        pub fn init(number: T) @This() {
+            return .{
+                .number = number,
+                .n = number,
+                .m = 0,
+                .i = count_digits_fast(number),
+            };
+        }
+
+        pub fn next(self: *@This()) ?u8 {
+            if (self.i == 0) return null;
+            defer self.i -= 1;
+
+            self.n = @divTrunc(
+                self.number - self.m,
+                std.math.pow(T, 10, @intCast(T, self.i) - 1),
+            );
+
+            self.m += self.n * std.math.pow(T, 10, @intCast(T, self.i) - 1);
+
+            return @truncate(u8, self.n);
+        }
+    };
+}
+
+pub fn count_digits_fast(number: anytype) usize {
+    const n = if (number < 0) -number else number;
+    return @as(usize, switch (n) {
+        0...9 => 1,
+        10...99 => 2,
+        100...999 => 3,
+        1000...9999 => 4,
+        10000...99999 => 5,
+        else => unreachable,
+    }) + @as(usize, if (number < 0) 1 else 0);
+}
+
+//
+
 const testing = std.testing;
 
 test "quicksort" {
@@ -90,4 +136,20 @@ test "quicksort" {
 
         try testing.expectEqualSlices(u32, &expected, &values);
     }
+}
+
+test "NumberDigitIterator" {
+    var digit_iter = NumberDigitIterator(u32).init(1234);
+    var i: usize = 0;
+    while (digit_iter.next()) |digit| {
+        switch (i) {
+            0 => try testing.expectEqual(@as(u8, 1), digit),
+            1 => try testing.expectEqual(@as(u8, 2), digit),
+            2 => try testing.expectEqual(@as(u8, 3), digit),
+            3 => try testing.expectEqual(@as(u8, 4), digit),
+            else => unreachable,
+        }
+        i += 1;
+    }
+    try testing.expectEqual(@as(usize, 4), i);
 }
