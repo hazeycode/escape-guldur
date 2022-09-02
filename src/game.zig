@@ -329,27 +329,22 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             state.action_targets.clear();
 
             switch (state.player.active_item) {
-                .fists, .sword => { // melee
-                    for ([_]world.Location{
-                        state.player.entity.location.north(),
-                        state.player.entity.location.east(),
-                        state.player.entity.location.south(),
-                        state.player.entity.location.west(),
-                    }) |location| {
-                        if (world.map_get_tile_kind(state.world_map, location) != .wall) {
-                            for (state.monsters) |*monster| {
-                                if (monster.entity.health > 0 and monster.entity.location.eql(location)) {
-                                    try state.action_targets.push(monster.entity.location);
-                                }
-                            }
-                            for (state.fire_monsters) |*monster| {
-                                if (monster.entity.health > 0 and monster.entity.location.eql(location)) {
-                                    try state.action_targets.push(monster.entity.location);
-                                }
-                            }
-                        }
-                    }
-                },
+                .fists => try find_melee_targets(state, [_]world.Direction{
+                    world.Direction.north,
+                    world.Direction.east,
+                    world.Direction.south,
+                    world.Direction.west,
+                }),
+                .sword => try find_melee_targets(state, [_]world.Direction{
+                    world.Direction.north,
+                    world.Direction.north_east,
+                    world.Direction.east,
+                    world.Direction.south_east,
+                    world.Direction.south,
+                    world.Direction.south_west,
+                    world.Direction.west,
+                    world.Direction.north_west,
+                }),
                 .small_axe => { // ranged attack
                     try find_ranged_targets(state, state.monsters);
                     try find_ranged_targets(state, state.fire_monsters);
@@ -372,6 +367,24 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                         );
                     }
                 },
+            }
+        }
+
+        fn find_melee_targets(state: *State, directions: anytype) !void {
+            for (directions) |dir| {
+                const location = state.player.entity.location.walk(dir);
+                if (world.map_get_tile_kind(state.world_map, location) != .wall) {
+                    for (state.monsters) |*monster| {
+                        if (monster.entity.health > 0 and monster.entity.location.eql(location)) {
+                            try state.action_targets.push(monster.entity.location);
+                        }
+                    }
+                    for (state.fire_monsters) |*monster| {
+                        if (monster.entity.health > 0 and monster.entity.location.eql(location)) {
+                            try state.action_targets.push(monster.entity.location);
+                        }
+                    }
+                }
             }
         }
 
@@ -605,18 +618,14 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
         /// finds walkable adjacent tile or ramains still (random walk)
         fn random_walk(state: *State, entity: *Entity) void {
-            const north = entity.location.north();
-            const east = entity.location.east();
-            const south = entity.location.south();
-            const west = entity.location.west();
-
-            var location = switch (@intToEnum(world.Direction, rng.random().int(u2))) {
-                .north => north,
-                .east => east,
-                .south => south,
-                .west => west,
+            const ortho_locations = [_]world.Location{
+                entity.location.north(),
+                entity.location.east(),
+                entity.location.south(),
+                entity.location.west(),
             };
-
+            const random_index = @mod(rng.random().int(usize), 4);
+            const location = ortho_locations[random_index];
             if (test_walkable(state, location)) {
                 entity.target_location = location;
                 entity.state = .walk;

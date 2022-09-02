@@ -25,7 +25,16 @@ pub const MapTileKind = enum(u4) {
     fire_monster_spawn = 12,
 };
 
-pub const Direction = enum { north, east, south, west };
+pub const Direction = enum(u3) {
+    north,
+    north_east,
+    east,
+    south_east,
+    south,
+    south_west,
+    west,
+    north_west,
+};
 
 pub const Location = struct {
     x: i16,
@@ -34,9 +43,13 @@ pub const Location = struct {
     pub fn walk(self: @This(), direction: Direction) Location {
         return switch (direction) {
             .north => self.north(),
+            .north_east => self.north_east(),
             .east => self.east(),
+            .south_east => self.south_east(),
             .south => self.south(),
+            .south_west => self.south_west(),
             .west => self.west(),
+            .north_west => self.north_west(),
         };
     }
 
@@ -54,20 +67,36 @@ pub const Location = struct {
         return @intCast(u8, dx + dy);
     }
 
-    pub fn north(self: Location) Location {
+    pub inline fn north(self: Location) Location {
         return Location{ .x = self.x, .y = self.y - 1 };
     }
 
-    pub fn east(self: Location) Location {
+    pub inline fn north_east(self: Location) Location {
+        return Location{ .x = self.x + 1, .y = self.y - 1 };
+    }
+
+    pub inline fn east(self: Location) Location {
         return Location{ .x = self.x + 1, .y = self.y };
     }
 
-    pub fn south(self: Location) Location {
+    pub inline fn south_east(self: Location) Location {
+        return Location{ .x = self.x + 1, .y = self.y + 1 };
+    }
+
+    pub inline fn south(self: Location) Location {
         return Location{ .x = self.x, .y = self.y + 1 };
     }
 
-    pub fn west(self: Location) Location {
+    pub inline fn south_west(self: Location) Location {
+        return Location{ .x = self.x - 1, .y = self.y + 1 };
+    }
+
+    pub inline fn west(self: Location) Location {
         return Location{ .x = self.x - 1, .y = self.y };
+    }
+
+    pub inline fn north_west(self: Location) Location {
+        return Location{ .x = self.x - 1, .y = self.y - 1 };
     }
 };
 
