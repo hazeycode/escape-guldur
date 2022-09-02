@@ -12,7 +12,7 @@ pub fn with_data(data: anytype) type {
         pub const tile_px_width = 10;
         pub const tile_px_height = 9;
         pub const max_sprites = 64;
-        pub const move_animation_frames = 4;
+        pub const move_animation_frames = 3;
 
         pub var frame_counter: usize = 0;
 
