@@ -285,27 +285,25 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
         }
 
         fn try_hit_enemy(state: *State, location: world.Location) bool {
-            for (state.monsters) |*monster| {
-                if (monster.entity.health > 0 and
-                    monster.entity.location.eql(location))
-                {
-                    state.player.entity.target_location = monster.entity.location;
-                    monster.entity.pending_damage += state.player.get_damage();
-                    return true;
-                }
+            if (entities_try_hit(&state.monsters, location) orelse
+                entities_try_hit(&state.fire_monsters, location)) |entity|
+            {
+                state.player.entity.target_location = entity.location;
+                entity.pending_damage += state.player.get_damage();
+                return true;
             }
-
-            for (state.fire_monsters) |*fire_monster| {
-                if (fire_monster.entity.health > 0 and
-                    fire_monster.entity.location.eql(location))
-                {
-                    state.player.entity.target_location = fire_monster.entity.location;
-                    fire_monster.entity.pending_damage += state.player.get_damage();
-                    return true;
-                }
-            }
-
             return false;
+        }
+
+        fn entities_try_hit(entities: anytype, location: world.Location) ?*Entity {
+            for (entities) |*e| {
+                if (e.entity.health > 0 and
+                    e.entity.location.eql(location))
+                {
+                    return &e.entity;
+                }
+            }
+            return null;
         }
 
         fn try_cycle_item(state: *State) void {
