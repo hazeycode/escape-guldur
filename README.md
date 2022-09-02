@@ -26,7 +26,7 @@ w4 watch zig-out/lib/cart.wasm
 Produce a size-optimised release build (zig-out/lib/opt.wasm) by running:
 
 ```shell
-zig build release
+zig build -Drelease-small=true release
 ```
 
 and remember to test it with:
