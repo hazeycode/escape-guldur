@@ -538,7 +538,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                         if (res.hit_target) {
                             platform.trace("fire_monster: spit at player");
                             spawn_fire(state, res.path);
-                            fire_monster.cooldown = 1;
+                            fire_monster.cooldown = 2;
                             break :find_move;
                         }
                     }
@@ -634,6 +634,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
         fn update_world_lightmap(state: *State) void {
             platform.trace("update world lightmap");
+            defer platform.trace("lightmap updated");
 
             var location: world.Location = .{ .x = 0, .y = 0 };
             while (location.x < world.size_x) : (location.x += 1) {
