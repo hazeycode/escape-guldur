@@ -353,7 +353,7 @@ pub fn with_data(data: anytype) type {
             w4.text("\x80 aim item /", 10, 50 + (8 + 1) * 4);
             w4.text("  use item", 10, 50 + (8 + 1) * 5);
             w4.text("\x81 cycle item /", 10, 50 + (8 + 1) * 8);
-            w4.text("  cycle aim", 10, 50 + (8 + 1) * 9);
+            w4.text("  cancel aim", 10, 50 + (8 + 1) * 9);
         }
 
         pub fn draw_text_number(number: i32, x: i32, y: i32) u16 {
