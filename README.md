@@ -8,8 +8,8 @@ A retro action-RPG written in [Zig](https://ziglang.org/) for the [WASM-4 fantas
 
 #### Requirements
 - [Zig 0.9.1](https://github.com/ziglang/zig/releases/tag/0.9.1)
+- [WASM-4](https://wasm4.org/docs/getting-started/setup)
 - [wasm-opt](https://www.npmjs.com/package/wasm-opt)
-- [WASM-4](https://wasm4.org/)
 
 Build (debug) the cart (zig-out/lib/cart.wasm) by running:
 
