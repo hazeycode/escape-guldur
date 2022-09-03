@@ -229,6 +229,9 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                     fire.path.length = if (path.length <= 1) 0 else path.length - 1;
                     if (fire.path.length > 0) {
                         std.mem.copy(world.Location, fire.path.locations[0..], path.locations[1..]);
+                        fire.entity.state = .walk;
+                    } else {
+                        fire.entity.state = .idle;
                     }
                     platform.trace("spawned fire");
                     return;
@@ -598,6 +601,8 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             if (fire.path.length > 0) {
                 platform.trace("fire walk path");
 
+                fire.entity.state = .walk;
+
                 fire.entity.target_location = fire.path.locations[0];
 
                 if (world.map_get_tile_kind(state.world_map, fire.entity.location) != .wall) {
@@ -610,6 +615,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                 return;
             }
 
+            fire.entity.state = .idle;
             fire.entity.health = 0;
             fire.path.length = 0;
 
@@ -661,14 +667,33 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             state.action_targets.clear();
         }
 
-        fn entities_apply_pending_damage(pool: anytype) void {
-            for (pool) |*e| {
+        fn entities_apply_pending_damage(entities: anytype) void {
+            for (entities) |*e| {
                 if (e.entity.pending_damage > 0) {
                     e.entity.health -= e.entity.pending_damage;
                     e.entity.pending_damage = 0;
                     e.entity.did_receive_damage = true;
                     sfx.deal_damage();
                 }
+            }
+        }
+
+        fn entities_complete_move(entities: anytype) void {
+            for (entities) |*e| {
+                if (e.entity.health > 0) {
+                    switch (e.entity.state) {
+                        .walk => {
+                            e.entity.location = e.entity.target_location;
+                        },
+                        else => {
+                            e.entity.target_location = e.entity.location;
+                        },
+                    }
+                } else {
+                    e.entity.location = .{ .x = 0, .y = 0 };
+                    e.entity.target_location = e.entity.location;
+                }
+                e.entity.state = .idle;
             }
         }
 
@@ -789,31 +814,9 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                 .response => {
                     const animation_frame = gfx.frame_counter - anim_start_frame;
                     if (animation_frame > gfx.move_animation_frames) {
-                        for (state.monsters) |*monster| {
-                            switch (monster.entity.state) {
-                                .walk => {
-                                    monster.entity.location = monster.entity.target_location;
-                                },
-                                else => {
-                                    monster.entity.target_location = monster.entity.location;
-                                },
-                            }
-                            monster.entity.state = .idle;
-                        }
-                        for (state.fire_monsters) |*fire_monster| {
-                            switch (fire_monster.entity.state) {
-                                .walk => {
-                                    fire_monster.entity.location = fire_monster.entity.target_location;
-                                },
-                                else => {
-                                    fire_monster.entity.target_location = fire_monster.entity.location;
-                                },
-                            }
-                            fire_monster.entity.state = .idle;
-                        }
-                        for (state.fire) |*fire| {
-                            fire.entity.location = fire.entity.target_location;
-                        }
+                        entities_complete_move(&state.monsters);
+                        entities_complete_move(&state.fire_monsters);
+                        entities_complete_move(&state.fire);
 
                         if (state.player.entity.pending_damage > 0) {
                             state.player.entity.health -= state.player.entity.pending_damage;
