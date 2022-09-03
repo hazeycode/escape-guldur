@@ -9,6 +9,8 @@ const StaticList = util.StaticList;
 const world = @import("world.zig");
 const WorldMap = world.Map(world.size_x, world.size_y);
 
+const level_debug_override: ?u8 = null;
+
 pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
     return struct {
         const starting_player_health = 5;
@@ -161,8 +163,8 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                 self.turn_state = .ready;
                 self.action_targets.clear();
 
-                self.level = level;
-                self.world_map = @bitCast(WorldMap, data.levels[level]);
+                self.level = level_debug_override orelse level;
+                self.world_map = @bitCast(WorldMap, data.levels[self.level]);
 
                 // reset entity pools
                 for (self.monsters) |*monster| monster.entity.health = 0;
