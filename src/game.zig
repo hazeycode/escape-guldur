@@ -961,6 +961,8 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                         entities_complete_move(&state.charge_monsters);
                         entities_complete_move(&state.fire);
 
+                        state.player.entity.target_location = state.player.entity.location;
+
                         if (state.player.entity.pending_damage > 0) {
                             state.player.entity.health -= state.player.entity.pending_damage;
                             state.player.entity.pending_damage = 0;
