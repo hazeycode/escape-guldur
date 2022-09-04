@@ -1,7 +1,7 @@
 const w4 = @import("wasm4.zig");
 
 const data = @import("data.zig");
-const gfx = @import("gfx.zig").with_data(data);
+const gfx = @import("gfx.zig");
 const sfx = @import("sfx.zig");
 
 const platform = struct {

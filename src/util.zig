@@ -1,28 +1,45 @@
 const std = @import("std");
 
-pub fn StaticList(comptime ElementType: type, comptime max_count: usize) type {
+pub fn StaticList(
+    comptime ElementType: type,
+    comptime max_length: usize,
+) type {
     return struct {
-        elements: [max_count]ElementType = undefined,
-        count: usize = 0,
+        elements: [max_length]ElementType = undefined,
+        length: usize = 0,
 
         pub fn push(self: *@This(), element: ElementType) !void {
-            if (self.count >= max_count) return error.NoSpaceLeft;
-            self.elements[self.count] = element;
-            self.count += 1;
+            if (self.length >= max_length) return error.NoSpaceLeft;
+            self.elements[self.length] = element;
+            self.length += 1;
+        }
+
+        pub fn pop(self: *@This()) ?ElementType {
+            if (self.length == 0) return null;
+            const ret = self.elements[0];
+            if (self.length > 1) {
+                std.mem.copy(
+                    ElementType,
+                    self.elements[0..],
+                    self.elements[1..],
+                );
+            }
+            self.length -= 1;
+            return ret;
         }
 
         pub fn clear(self: *@This()) void {
             self.elements = std.mem.zeroes(@TypeOf(self.elements));
-            self.count = 0;
+            self.length = 0;
         }
 
         pub inline fn get(self: *@This(), index: usize) !ElementType {
-            if (index >= self.count) return error.InvalidElementAtIndex;
+            if (index >= self.length) return error.InvalidElementAtIndex;
             return self.elements[index];
         }
 
         pub inline fn all(self: *@This()) []ElementType {
-            return self.elements[0..self.count];
+            return self.elements[0..self.length];
         }
     };
 }

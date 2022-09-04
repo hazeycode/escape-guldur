@@ -1,6 +1,9 @@
 const std = @import("std");
 const w4 = @import("wasm4.zig");
 
+const util = @import("util.zig");
+const StaticList = util.StaticList;
+
 const bresenham_line = @import("bresenham.zig").line;
 
 pub const size_x = 20;
@@ -23,6 +26,7 @@ pub const MapTileKind = enum(u4) {
     player_spawn = 10,
     monster_spawn = 11,
     fire_monster_spawn = 12,
+    charge_monster_spawn = 13,
 };
 
 pub const Direction = enum(u3) {
@@ -34,7 +38,27 @@ pub const Direction = enum(u3) {
     south_west,
     west,
     north_west,
+
+    pub const all = [_]@This(){
+        @This().north,
+        @This().north_east,
+        @This().east,
+        @This().south_east,
+        @This().south,
+        @This().south_west,
+        @This().west,
+        @This().north_west,
+    };
+
+    pub const all_orthogonal = [_]@This(){
+        @This().north,
+        @This().east,
+        @This().south,
+        @This().west,
+    };
 };
+
+pub const Path = StaticList(Location, max_distance);
 
 pub const Location = struct {
     x: i16,
@@ -100,11 +124,6 @@ pub const Location = struct {
     }
 };
 
-pub const Path = struct {
-    locations: [max_distance]Location = undefined,
-    length: usize = 0,
-};
-
 pub const LineOfSightResult = struct {
     path: Path = .{},
     hit_target: bool = false,
@@ -124,19 +143,21 @@ pub fn check_line_of_sight(
         pub fn plot(self: *@This(), x: i32, y: i32) bool {
             const location = Location{ .x = @intCast(u8, x), .y = @intCast(u8, y) };
 
-            self.result.path.locations[self.result.path.length] = location;
-            self.result.path.length += 1;
+            switch (map_get_tile_kind(self.world_map, location)) {
+                .wall, .breakable_wall => return false,
+                else => {},
+            }
+
+            self.result.path.push(location) catch {
+                return false;
+            };
 
             if (location.eql(self.target)) {
                 self.result.hit_target = true;
                 return false;
             }
 
-            if (map_get_tile_kind(self.world_map, location) == .wall) {
-                return false;
-            } else {
-                return true;
-            }
+            return true;
         }
     }{
         .world_map = world_map,
