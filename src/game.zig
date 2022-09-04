@@ -73,7 +73,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             }
         };
 
-        pub const Screen = enum { title, controls, game, dead, win };
+        pub const Screen = enum { title, controls, game, reload, win };
 
         const Entity = struct {
             location: world.Location = world.Location{ .x = 0, .y = 0 },
@@ -136,7 +136,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
         pub const State = struct {
             // timer: std.time.Timer = undefined,
             game_elapsed_ns: u64 = 0,
-            turn_state: enum { ready, aim, commit, response } = .ready,
+            turn_state: enum { ready, aim, commit, response, dead } = .ready,
             turn: u32 = 0,
             level: u8 = 0,
             action_target: u8 = 0,
@@ -843,7 +843,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                 .title => title_screen(state, input),
                 .controls => controls_screen(input),
                 .game => game_screen(state, input),
-                .dead => stats_screen(state, input, "YOU DIED", .title, null),
+                .reload => stats_screen(state, input, "YOU DIED", .title, null),
                 .win => stats_screen(state, input, "YOU ESCAPED", .title, null),
             }
         }
@@ -972,13 +972,16 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
                         if (state.player.entity.health <= 0) {
                             platform.trace("player died");
-                            screen = .dead;
+                            state.turn_state = .dead;
                             // state.game_elapsed_ns = state.timer.read();
+                        } else {
+                            state.turn_state = .ready;
                         }
+
                         state.turn += 1;
-                        state.turn_state = .ready;
                     }
                 },
+                .dead => {},
             }
 
             const animation_frame = switch (state.turn_state) {
@@ -1020,6 +1023,19 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                     .x = gfx.screen_px_width / 2,
                     .y = gfx.screen_px_height / 2,
                 });
+            }
+
+            defer {
+                state.player.entity.did_receive_damage = false;
+                for (state.monsters) |*monster| {
+                    monster.entity.did_receive_damage = false;
+                }
+                for (state.fire_monsters) |*monster| {
+                    monster.entity.did_receive_damage = false;
+                }
+                for (state.charge_monsters) |*monster| {
+                    monster.entity.did_receive_damage = false;
+                }
             }
 
             var sprite_list = gfx.SpriteList{};
@@ -1107,19 +1123,11 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
             gfx.sprite_list_draw_decorations(&sprite_list, camera_screen_pos, animation_frame);
 
-            gfx.draw_hud(state, camera_screen_pos);
-
-            {
-                state.player.entity.did_receive_damage = false;
-                for (state.monsters) |*monster| {
-                    monster.entity.did_receive_damage = false;
-                }
-                for (state.fire_monsters) |*monster| {
-                    monster.entity.did_receive_damage = false;
-                }
-                for (state.charge_monsters) |*monster| {
-                    monster.entity.did_receive_damage = false;
-                }
+            if (state.turn_state == .dead) {
+                gfx.draw_transparent_overlay();
+                stats_screen(state, newest_input, "YOU DIED", .reload, null);
+            } else {
+                gfx.draw_hud(state, camera_screen_pos);
             }
         }
 

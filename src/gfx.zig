@@ -306,8 +306,6 @@ pub fn draw_screen_title(title_text: []const u8) void {
 }
 
 pub fn draw_stats(stats: anytype) void {
-    w4.DRAW_COLORS.* = 0x03;
-
     {
         const postfix = " turns taken";
         const y = w4.SCREEN_SIZE / 3 * 2;
@@ -381,6 +379,18 @@ pub fn draw_text_number(number: anytype, x: i32, y: i32) u16 {
     }
 
     return dx;
+}
+
+pub fn draw_transparent_overlay() void {
+    w4.DRAW_COLORS.* = 0x01;
+    var i: i32 = 0;
+    while (i < w4.SCREEN_SIZE) : (i += 2) {
+        w4.line(i, 0, 0, i);
+    }
+    i = 1;
+    while (i < w4.SCREEN_SIZE) : (i += 2) {
+        w4.line(w4.SCREEN_SIZE - 1, i, i, w4.SCREEN_SIZE - 1);
+    }
 }
 
 pub const Texture = struct {
