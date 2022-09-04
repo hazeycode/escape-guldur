@@ -374,7 +374,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
         fn find_melee_targets(state: *State, directions: anytype) !void {
             for (directions) |dir| {
-                const location = state.player.entity.location.walk(dir);
+                const location = state.player.entity.location.walk(dir, 1);
                 if (entities_try_hit(&state.monsters, location) orelse
                     entities_try_hit(&state.fire_monsters, location) orelse
                     entities_try_hit(&state.charge_monsters, location)) |entity|
@@ -527,10 +527,10 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
                     { // find a walkable tile that gets closer to player
                         const possible_locations: [4]world.Location = .{
-                            monster.entity.location.north(),
-                            monster.entity.location.east(),
-                            monster.entity.location.south(),
-                            monster.entity.location.west(),
+                            monster.entity.location.north(1),
+                            monster.entity.location.east(1),
+                            monster.entity.location.south(1),
+                            monster.entity.location.west(1),
                         };
                         for (&possible_locations) |new_location| {
                             if (test_walkable(state, new_location)) {
@@ -596,7 +596,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                                 platform.tracef("charge_monster: set path with length %d", iy);
                                 var next_location = monster.entity.location;
                                 while (iy > 0) : (iy -= 2) {
-                                    next_location = next_location.walk(dir).walk(dir);
+                                    next_location = next_location.walk(dir, 2);
                                     monster.path.push(next_location) catch {
                                         platform.trace("error: failed to append to path. out of space");
                                         unreachable;
@@ -611,7 +611,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                                 platform.tracef("charge_monster: set path with length %d", ix);
                                 var next_location = monster.entity.location;
                                 while (ix > 0) : (ix -= 2) {
-                                    next_location = next_location.walk(dir).walk(dir);
+                                    next_location = next_location.walk(dir, 2);
                                     monster.path.push(next_location) catch {
                                         platform.trace("error: failed to append to path. out of space");
                                         unreachable;
@@ -673,10 +673,10 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
         /// finds walkable adjacent tile or ramains still (random walk)
         fn random_walk(state: *State, entity: *Entity) void {
             const ortho_locations = [_]world.Location{
-                entity.location.north(),
-                entity.location.east(),
-                entity.location.south(),
-                entity.location.west(),
+                entity.location.north(1),
+                entity.location.east(1),
+                entity.location.south(1),
+                entity.location.west(1),
             };
             const random_index = @mod(rng.random().int(usize), 4);
             const location = ortho_locations[random_index];
@@ -780,15 +780,15 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                         } else if (input.action_2 > 0) {
                             try_cycle_item(state);
                         } else if (input.up > 0) {
-                            try_move(state, state.player.entity.location.walk(.north));
+                            try_move(state, state.player.entity.location.walk(.north, 1));
                         } else if (input.right > 0) {
                             flip_player_sprite = false;
-                            try_move(state, state.player.entity.location.walk(.east));
+                            try_move(state, state.player.entity.location.walk(.east, 1));
                         } else if (input.down > 0) {
-                            try_move(state, state.player.entity.location.walk(.south));
+                            try_move(state, state.player.entity.location.walk(.south, 1));
                         } else if (input.left > 0) {
                             flip_player_sprite = true;
-                            try_move(state, state.player.entity.location.walk(.west));
+                            try_move(state, state.player.entity.location.walk(.west, 1));
                         }
                     }
                 },
