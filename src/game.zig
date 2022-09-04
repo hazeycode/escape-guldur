@@ -11,7 +11,7 @@ const WorldMap = world.Map(world.size_x, world.size_y);
 
 const bresenham_line = @import("bresenham.zig").line;
 
-const level_debug_override: ?u8 = if (false) 3 else null;
+const level_debug_override: ?u8 = if (true) 3 else null;
 
 pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
     return struct {
@@ -619,6 +619,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                                 switch (world.map_get_tile_kind(self.game_state.world_map, location)) {
                                     .wall => {
                                         self.hit_impassable = true;
+                                        sfx.bash_wall();
                                         return false;
                                     },
                                     .breakable_wall => {
@@ -1216,3 +1217,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
         }
     };
 }
+
+// Tests
+
+const testing = std.testing;
