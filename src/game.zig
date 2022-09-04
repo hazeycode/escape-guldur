@@ -79,7 +79,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             health: i8,
             pending_damage: u4 = 0,
             did_receive_damage: bool = false,
-            state: enum { idle, walk, alerted, melee_attack } = .idle,
+            state: enum { idle, walk, alerted, melee_attack, charge } = .idle,
 
             pub fn set_location(self: *@This(), location: world.Location) void {
                 self.location = location;
@@ -580,62 +580,65 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             defer platform.trace("charge_monster: move complete");
 
             switch (monster.entity.state) {
-                .idle => {
-                    platform.trace("charge_monster: idle...");
-
+                .idle, .walk => {
                     const vertically_aligned = monster.entity.location.x == state.player.entity.location.x;
                     const horizontally_aligned = monster.entity.location.y == state.player.entity.location.y;
 
                     if (vertically_aligned or horizontally_aligned) {
                         const d = monster.entity.location.manhattan_to(state.player.entity.location);
-                        if (d < 11) {
-                            const res = world.check_line_of_sight(
-                                WorldMap,
-                                state.world_map,
-                                monster.entity.location,
-                                state.player.entity.location,
-                            );
-                            if (res.hit_target) {
-                                platform.trace("charge_monster: spotted player");
-                                monster.cooldown = 1;
-                                if (vertically_aligned) {
-                                    platform.trace("charge_monster: charge!");
-                                    const dy = state.player.entity.location.y - monster.entity.location.y;
-                                    const dir: world.Direction = if (dy < 0) .north else .south;
-                                    var iy = if (dy < 0) -dy else dy;
-                                    while (iy > 0) : (iy -= 1) {
-                                        const next_location = monster.entity.location.walk(dir).walk(dir);
-                                        monster.path.push(next_location) catch {
-                                            platform.trace("error: failed to append to path. out of space");
-                                            unreachable;
-                                        };
-                                    }
-                                    monster.entity.state = .alerted;
-                                    return;
-                                } else if (horizontally_aligned) {
-                                    platform.trace("charge_monster: charge!");
-                                    const dx = state.player.entity.location.x - monster.entity.location.x;
-                                    const dir: world.Direction = if (dx < 0) .west else .east;
-                                    var ix = if (dx < 0) -dx else dx;
-                                    while (ix > 0) : (ix -= 1) {
-                                        const next_location = monster.entity.location.walk(dir).walk(dir);
-                                        monster.path.push(next_location) catch {
-                                            platform.trace("error: failed to append to path. out of space");
-                                            unreachable;
-                                        };
-                                    }
-                                    monster.entity.state = .alerted;
-                                    return;
+                        if (d < 13) {
+                            platform.trace("charge_monster: spotted player");
+                            monster.cooldown = 1;
+                            if (vertically_aligned) {
+                                const dy = state.player.entity.location.y - monster.entity.location.y;
+                                const dir: world.Direction = if (dy < 0) .north else .south;
+                                var iy = if (dy < 0) -dy else dy + 2;
+                                platform.tracef("charge_monster: set path with length %d", iy);
+                                var next_location = monster.entity.location;
+                                while (iy > 0) : (iy -= 2) {
+                                    next_location = next_location.walk(dir).walk(dir);
+                                    monster.path.push(next_location) catch {
+                                        platform.trace("error: failed to append to path. out of space");
+                                        unreachable;
+                                    };
                                 }
+                                monster.entity.state = .alerted;
+                                return;
+                            } else if (horizontally_aligned) {
+                                const dx = state.player.entity.location.x - monster.entity.location.x;
+                                const dir: world.Direction = if (dx < 0) .west else .east;
+                                var ix = if (dx < 0) -dx else dx + 2;
+                                platform.tracef("charge_monster: set path with length %d", ix);
+                                var next_location = monster.entity.location;
+                                while (ix > 0) : (ix -= 2) {
+                                    next_location = next_location.walk(dir).walk(dir);
+                                    monster.path.push(next_location) catch {
+                                        platform.trace("error: failed to append to path. out of space");
+                                        unreachable;
+                                    };
+                                }
+                                monster.entity.state = .alerted;
+                                return;
                             }
                         }
                     }
                 },
                 .alerted => {
+                    platform.trace("charge_monster: begin charge");
                     if (monster.path.pop()) |next_location| {
                         monster.entity.target_location = next_location;
                     }
-                    monster.entity.state = .melee_attack;
+                    monster.entity.state = .charge;
+                    return;
+                },
+                .charge => {
+                    platform.trace("charge_monster: charge");
+                    if (monster.path.pop()) |next_location| {
+                        monster.entity.target_location = next_location;
+                    } else {
+                        monster.entity.state = .idle;
+                        platform.trace("charge_monster: end charge");
+                    }
                     return;
                 },
                 else => {},
@@ -727,19 +730,11 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             for (entities) |*e| {
                 if (e.entity.health > 0) {
                     switch (e.entity.state) {
-                        .walk => {
-                            e.entity.location = e.entity.target_location;
-                        },
                         .melee_attack => {
-                            if (e.path.pop()) |next_location| {
-                                e.entity.location = e.entity.target_location;
-                                e.entity.target_location = next_location;
-                            } else {
-                                e.entity.state = .idle;
-                            }
+                            e.entity.target_location = e.entity.location;
                         },
                         else => {
-                            e.entity.target_location = e.entity.location;
+                            e.entity.location = e.entity.target_location;
                         },
                     }
                 } else {
