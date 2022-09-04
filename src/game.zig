@@ -56,6 +56,12 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                 }
                 return self.inputs[self.read_cursor];
             }
+
+            pub fn clear(self: *@This()) void {
+                self.count = 0;
+                self.read_cursor = 0;
+                self.write_cursor = 0;
+            }
         }{};
 
         pub const ButtonPressEvent = packed struct {
@@ -163,6 +169,8 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
             pub fn load_level(self: *@This(), level: u8) void {
                 platform.trace("load_level");
+
+                input_queue.clear();
 
                 self.turn_state = .ready;
                 self.action_targets.clear();
