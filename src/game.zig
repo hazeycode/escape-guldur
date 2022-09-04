@@ -11,7 +11,7 @@ const WorldMap = world.Map(world.size_x, world.size_y);
 
 const bresenham_line = @import("bresenham.zig").line;
 
-const level_debug_override: ?u8 = 3; //null; //3;
+const level_debug_override: ?u8 = null; //3;
 
 pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
     return struct {
@@ -665,6 +665,8 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                                         },
                                         1,
                                     );
+                                    // TODO(hazeycode): pick a random available location instead of trying in arbitary order?
+                                    // TODO(hazeycode): test collision with other enemies and push them back
                                     for ([_]world.Location{
                                         monster.entity.target_location.north(1),
                                         monster.entity.target_location.east(1),
