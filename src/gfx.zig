@@ -164,7 +164,7 @@ pub fn draw_world(state: anytype, camera_position: ScreenPosition) void {
         defer location.y = 0;
         while (location.y < world.size_y) : (location.y += 1) {
             switch (world.map_get_tile_kind(state.world_map, location)) {
-                .wall, .locked_door => {},
+                .wall, .secret_path => {},
                 .door => {
                     w4.DRAW_COLORS.* = 0x30;
                     const screen_pos = world_to_screen(location).sub(camera_position);
@@ -404,18 +404,20 @@ pub const Texture = struct {
     };
 
     pub const door = @This(){
-        .bytes = &[8]u8{
-            0b00111000,
-            0b01111100,
-            0b11111110,
-            0b11111110,
-            0b11111110,
-            0b11111110,
-            0b11111110,
+        .bytes = &[10]u8{
+            0b00111100,
+            0b01111110,
+            0b01111110,
+            0b11111111,
+            0b11111111,
+            0b11111111,
+            0b11111111,
+            0b00000000,
+            0b00000000,
             0b00000000,
         },
         .width = 8,
-        .height = 8,
+        .height = 10,
         .bpp = 1,
     };
 

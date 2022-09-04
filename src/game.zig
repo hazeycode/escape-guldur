@@ -449,7 +449,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             const kind = world.map_get_tile_kind(state.world_map, location);
 
             switch (kind) {
-                .wall, .breakable_wall, .locked_door => {
+                .wall, .breakable_wall, .secret_path => {
                     return false;
                 },
                 else => {
