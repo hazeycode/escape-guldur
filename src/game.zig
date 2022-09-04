@@ -1080,14 +1080,14 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                     };
                 }
 
-                if (fire.path.length > 1) {
-                    const location = fire.path.elements[0];
-                    if (world.map_get_tile(state.world_vis_map, location) > 0) {
+                if (fire.path.length > 0) {
+                    const next_location = fire.path.elements[0];
+                    if (world.map_get_tile(state.world_vis_map, fire.entity.target_location) > 0) {
                         sprite_list.push(.{
                             .texture = gfx.Texture.fire_small,
                             .draw_colours = 0x40,
-                            .location = location,
-                            .target_location = location,
+                            .location = next_location,
+                            .target_location = next_location,
                         }) catch {
                             platform.trace("warning: failed to push sprite. no space left");
                         };
