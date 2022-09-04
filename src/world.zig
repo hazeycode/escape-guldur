@@ -176,12 +176,6 @@ pub fn check_line_of_sight(
 }
 
 pub fn map_set_tile(world: anytype, location: Location, value: u4) void {
-    const world_type_info = @typeInfo(@TypeOf(world));
-    const child_type_info = @typeInfo(world_type_info.Pointer.child);
-    if (child_type_info != .Array or @typeInfo(child_type_info.Array.child) != .Array) {
-        @compileError("invalid world type");
-    }
-
     //w4.trace("map_set_tile");
 
     if (location.x < 0 or location.x > size_x or location.y < 0 or location.y > size_y) {
@@ -192,11 +186,6 @@ pub fn map_set_tile(world: anytype, location: Location, value: u4) void {
 }
 
 pub fn map_get_tile(world: anytype, location: Location) u4 {
-    const world_type_info = @typeInfo(@TypeOf(world));
-    if (world_type_info != .Array or @typeInfo(world_type_info.Array.child) != .Array) {
-        @compileError("invalid world type");
-    }
-
     //w4.trace("map_get_tile");
 
     if (location.x < 0 or location.x > size_x or location.y < 0 or location.y > size_y) {
@@ -207,11 +196,6 @@ pub fn map_get_tile(world: anytype, location: Location) u4 {
 }
 
 pub fn map_get_tile_kind(world: anytype, location: Location) MapTileKind {
-    const world_type_info = @typeInfo(@TypeOf(world));
-    if (world_type_info != .Array or @typeInfo(world_type_info.Array.child) != .Array) {
-        @compileError("invalid world type");
-    }
-
     //w4.trace("map_get_tile_kind");
 
     if (location.x < 0 or location.x > size_x or location.y < 0 or location.y > size_y) {

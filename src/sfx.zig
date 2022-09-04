@@ -17,3 +17,8 @@ pub fn receive_damage() void {
     w4.tone(300, 2 | (4 << 8), 80, w4.TONE_NOISE);
     w4.tone(300 | (100 << 16), 2 | (4 << 8), 100, w4.TONE_TRIANGLE);
 }
+
+pub fn destroy_wall() void {
+    w4.tone(200, 2 | (4 << 8), 80, w4.TONE_NOISE);
+    w4.tone(80, 2 | (4 << 8), 70, w4.TONE_PULSE1);
+}

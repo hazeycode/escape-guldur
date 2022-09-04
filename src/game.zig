@@ -11,7 +11,7 @@ const WorldMap = world.Map(world.size_x, world.size_y);
 
 const bresenham_line = @import("bresenham.zig").line;
 
-const level_debug_override: ?u8 = null; //3;
+const level_debug_override: ?u8 = if (false) 3 else null;
 
 pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
     return struct {
@@ -595,11 +595,11 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                             if (vertically_aligned) {
                                 const dy = state.player.entity.location.y - monster.entity.location.y;
                                 const dir: world.Direction = if (dy < 0) .north else .south;
-                                charge_monster_begin_charge(monster, dir, @intCast(u16, if (dy < 0) -dy else dy));
+                                charge_monster_begin_charge(monster, dir, @intCast(u16, if (dy < 0) -dy else dy) + 16);
                             } else if (horizontally_aligned) {
                                 const dx = state.player.entity.location.x - monster.entity.location.x;
                                 const dir: world.Direction = if (dx < 0) .west else .east;
-                                charge_monster_begin_charge(monster, dir, @intCast(u16, if (dx < 0) -dx else dx));
+                                charge_monster_begin_charge(monster, dir, @intCast(u16, if (dx < 0) -dx else dx) + 16);
                             }
                             return;
                         }
@@ -608,19 +608,27 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                 .charge => {
                     platform.trace("charge_monster: charge");
                     if (monster.path.pop()) |next_location| {
-                        monster.entity.target_location = next_location;
-
                         var plotter = struct {
                             game_state: *State,
-                            target: world.Location,
+                            last_passable: ?world.Location = null,
+                            hit_impassable: bool = false,
                             player_hit: bool = false,
 
                             pub fn plot(self: *@This(), x: i32, y: i32) bool {
                                 const location = world.Location{ .x = @intCast(u8, x), .y = @intCast(u8, y) };
                                 switch (world.map_get_tile_kind(self.game_state.world_map, location)) {
-                                    .wall => return false,
-                                    .breakable_wall => return false, // TODO: break wall
-                                    else => {},
+                                    .wall => {
+                                        self.hit_impassable = true;
+                                        return false;
+                                    },
+                                    .breakable_wall => {
+                                        world.map_set_tile(&self.game_state.world_map, location, 0);
+                                        sfx.destroy_wall();
+                                        self.last_passable = location;
+                                    },
+                                    else => {
+                                        self.last_passable = location;
+                                    },
                                 }
                                 if (location.eql(self.game_state.player.entity.location) or
                                     location.eql(self.game_state.player.entity.target_location))
@@ -632,16 +640,17 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                             }
                         }{
                             .game_state = state,
-                            .target = monster.entity.target_location,
                         };
 
                         bresenham_line(
                             @intCast(i32, monster.entity.location.x),
                             @intCast(i32, monster.entity.location.y),
-                            @intCast(i32, monster.entity.target_location.x),
-                            @intCast(i32, monster.entity.target_location.y),
+                            @intCast(i32, next_location.x),
+                            @intCast(i32, next_location.y),
                             &plotter,
                         );
+
+                        monster.entity.target_location = plotter.last_passable orelse next_location;
 
                         if (plotter.player_hit) {
                             const player = &state.player;
@@ -693,7 +702,14 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                             platform.trace("charge_monster pushed player");
                             player.entity.location = new_player_location;
                         }
+
+                        if (plotter.hit_impassable) {
+                            monster.path.clear();
+                            monster.entity.state = .idle;
+                            platform.trace("charge_monster: end charge");
+                        }
                     } else {
+                        monster.path.clear();
                         monster.entity.state = .idle;
                         platform.trace("charge_monster: end charge");
                     }
@@ -708,7 +724,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
         fn charge_monster_begin_charge(monster: *Enemy, dir: world.Direction, dist: u16) void {
             const speed = 2;
-            var i = @divTrunc(dist, speed) + 1;
+            var i = @divTrunc(dist, speed);
             platform.tracef("charge_monster: set path with length %d", i);
             var next_location = monster.entity.location;
             while (i > 0) : (i -= 1) {
