@@ -9,7 +9,9 @@ const StaticList = util.StaticList;
 const world = @import("world.zig");
 const WorldMap = world.Map(world.size_x, world.size_y);
 
-const level_debug_override: ?u8 = null; //3;
+const bresenham_line = @import("bresenham.zig").line;
+
+const level_debug_override: ?u8 = 3; //null; //3;
 
 pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
     return struct {
@@ -76,10 +78,12 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
         const Entity = struct {
             location: world.Location = world.Location{ .x = 0, .y = 0 },
             target_location: world.Location = world.Location{ .x = 0, .y = 0 },
+            cooldown: u8 = 0,
             health: i8,
             pending_damage: u4 = 0,
             did_receive_damage: bool = false,
-            state: enum { idle, walk, alerted, melee_attack, charge } = .idle,
+            state: enum { idle, walk, melee_attack, charge } = .idle,
+            look_direction: world.Direction,
 
             pub fn set_location(self: *@This(), location: world.Location) void {
                 self.location = location;
@@ -122,7 +126,6 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
         const Enemy = struct {
             entity: Entity,
             path: world.Path = .{},
-            cooldown: u8 = 0,
         };
 
         const Pickup = struct {
@@ -469,8 +472,8 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
         fn update_enemies(enemies: anytype, state: *State, update_fn: fn (*State, *Enemy) void) void {
             for (enemies) |*enemy| {
-                if (enemy.cooldown > 0) {
-                    enemy.cooldown -= 1;
+                if (enemy.entity.cooldown > 0) {
+                    enemy.entity.cooldown -= 1;
                 } else if (enemy.entity.health > 0) {
                     update_fn(state, enemy);
                 }
@@ -566,7 +569,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                 if (res.hit_target) {
                     platform.trace("fire_monster: spit at player");
                     spawn_fire(state, &res.path);
-                    monster.cooldown = 2;
+                    monster.entity.cooldown = 2;
                     return;
                 }
             }
@@ -588,53 +591,106 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                         const d = monster.entity.location.manhattan_to(state.player.entity.location);
                         if (d < 13) {
                             platform.trace("charge_monster: spotted player");
-                            monster.cooldown = 1;
+                            monster.entity.cooldown = 1;
                             if (vertically_aligned) {
                                 const dy = state.player.entity.location.y - monster.entity.location.y;
                                 const dir: world.Direction = if (dy < 0) .north else .south;
-                                var iy = if (dy < 0) -dy else dy + 2;
-                                platform.tracef("charge_monster: set path with length %d", iy);
-                                var next_location = monster.entity.location;
-                                while (iy > 0) : (iy -= 2) {
-                                    next_location = next_location.walk(dir, 2);
-                                    monster.path.push(next_location) catch {
-                                        platform.trace("error: failed to append to path. out of space");
-                                        unreachable;
-                                    };
-                                }
-                                monster.entity.state = .alerted;
-                                return;
+                                charge_monster_begin_charge(monster, dir, @intCast(u16, if (dy < 0) -dy else dy));
                             } else if (horizontally_aligned) {
                                 const dx = state.player.entity.location.x - monster.entity.location.x;
                                 const dir: world.Direction = if (dx < 0) .west else .east;
-                                var ix = if (dx < 0) -dx else dx + 2;
-                                platform.tracef("charge_monster: set path with length %d", ix);
-                                var next_location = monster.entity.location;
-                                while (ix > 0) : (ix -= 2) {
-                                    next_location = next_location.walk(dir, 2);
-                                    monster.path.push(next_location) catch {
-                                        platform.trace("error: failed to append to path. out of space");
-                                        unreachable;
-                                    };
-                                }
-                                monster.entity.state = .alerted;
-                                return;
+                                charge_monster_begin_charge(monster, dir, @intCast(u16, if (dx < 0) -dx else dx));
                             }
+                            return;
                         }
                     }
-                },
-                .alerted => {
-                    platform.trace("charge_monster: begin charge");
-                    if (monster.path.pop()) |next_location| {
-                        monster.entity.target_location = next_location;
-                    }
-                    monster.entity.state = .charge;
-                    return;
                 },
                 .charge => {
                     platform.trace("charge_monster: charge");
                     if (monster.path.pop()) |next_location| {
                         monster.entity.target_location = next_location;
+
+                        var plotter = struct {
+                            game_state: *State,
+                            target: world.Location,
+                            player_hit: bool = false,
+
+                            pub fn plot(self: *@This(), x: i32, y: i32) bool {
+                                const location = world.Location{ .x = @intCast(u8, x), .y = @intCast(u8, y) };
+                                switch (world.map_get_tile_kind(self.game_state.world_map, location)) {
+                                    .wall => return false,
+                                    .breakable_wall => return false, // TODO: break wall
+                                    else => {},
+                                }
+                                if (location.eql(self.game_state.player.entity.location) or
+                                    location.eql(self.game_state.player.entity.target_location))
+                                {
+                                    self.player_hit = true;
+                                }
+
+                                return true;
+                            }
+                        }{
+                            .game_state = state,
+                            .target = monster.entity.target_location,
+                        };
+
+                        bresenham_line(
+                            @intCast(i32, monster.entity.location.x),
+                            @intCast(i32, monster.entity.location.y),
+                            @intCast(i32, monster.entity.target_location.x),
+                            @intCast(i32, monster.entity.target_location.y),
+                            &plotter,
+                        );
+
+                        if (plotter.player_hit) {
+                            const player = &state.player;
+                            player.entity.pending_damage += 1;
+                            // try push player
+                            var new_player_location = monster.entity.target_location.walk(monster.entity.look_direction, 1);
+                            switch (world.map_get_tile_kind(state.world_map, new_player_location)) {
+                                .wall, .breakable_wall => {
+                                    player.entity.pending_damage += 1;
+                                    player.entity.state = .idle;
+                                    const location_behind_monster = monster.entity.target_location.walk(
+                                        switch (monster.entity.look_direction) {
+                                            .north => .south,
+                                            .south => .north,
+                                            .east => .west,
+                                            .west => .east,
+                                            else => {
+                                                platform.trace("error: invalid charge direction");
+                                                unreachable;
+                                            },
+                                        },
+                                        1,
+                                    );
+                                    for ([_]world.Location{
+                                        monster.entity.target_location.north(1),
+                                        monster.entity.target_location.east(1),
+                                        monster.entity.target_location.south(1),
+                                        monster.entity.target_location.west(1),
+                                    }) |possible_location| {
+                                        if (possible_location.eql(location_behind_monster)) {
+                                            continue;
+                                        }
+                                        if (test_walkable(state, possible_location)) {
+                                            new_player_location = possible_location;
+                                            player.entity.state = .walk;
+                                            break;
+                                        }
+                                    }
+                                    if (player.entity.state == .idle) {
+                                        player.entity.pending_damage = std.math.maxInt(
+                                            @TypeOf(player.entity.pending_damage),
+                                        );
+                                    }
+                                },
+                                else => {},
+                            }
+                            platform.trace("charge_monster pushed player");
+                            player.entity.location = new_player_location;
+                        }
                     } else {
                         monster.entity.state = .idle;
                         platform.trace("charge_monster: end charge");
@@ -646,6 +702,22 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
             platform.trace("charge_monster: random walk");
             random_walk(state, &monster.entity);
+        }
+
+        fn charge_monster_begin_charge(monster: *Enemy, dir: world.Direction, dist: u16) void {
+            const speed = 2;
+            var i = @divTrunc(dist, speed) + 1;
+            platform.tracef("charge_monster: set path with length %d", i);
+            var next_location = monster.entity.location;
+            while (i > 0) : (i -= 1) {
+                next_location = next_location.walk(dir, speed);
+                monster.path.push(next_location) catch {
+                    platform.trace("error: failed to append to path. out of space");
+                    unreachable;
+                };
+            }
+            monster.entity.state = .charge;
+            monster.entity.look_direction = dir;
         }
 
         fn update_fire(state: *State, fire: *Enemy) void {
@@ -683,6 +755,8 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             if (test_walkable(state, location)) {
                 entity.target_location = location;
                 entity.state = .walk;
+            } else {
+                entity.state = .idle;
             }
         }
 
@@ -749,13 +823,13 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             switch (screen) {
                 .title => title_screen(state, input),
                 .controls => controls_screen(input),
-                .game => update_and_render_game(state, input),
+                .game => game_screen(state, input),
                 .dead => stats_screen(state, input, "YOU DIED", .title, null),
                 .win => stats_screen(state, input, "YOU ESCAPED", .title, null),
             }
         }
 
-        fn update_and_render_game(state: anytype, newest_input: anytype) void {
+        fn game_screen(state: anytype, newest_input: anytype) void {
             if (state.level == data.levels.len) {
                 screen = .win;
                 // state.game_elapsed_ns = state.timer.read();
@@ -933,7 +1007,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             push_enemy_sprites(&sprite_list, state, .fire_monster);
             push_enemy_sprites(&sprite_list, state, .charge_monster);
 
-            // draw pickups
+            // push pickup sprites
             for (state.pickups) |*pickup| {
                 if (pickup.entity.health > 0 and world.map_get_tile(
                     state.world_vis_map,
@@ -949,11 +1023,13 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                         .location = pickup.entity.location,
                         .target_location = pickup.entity.target_location,
                         .casts_shadow = true,
-                    });
+                    }) catch {
+                        platform.trace("warning: failed to push sprite. no space left");
+                    };
                 }
             }
 
-            { // draw player
+            { // push player sprite
                 sprite_list.push(.{
                     .texture = gfx.Texture.player,
                     .draw_colours = if (state.player.entity.did_receive_damage) 0x40 else 0x20,
@@ -961,10 +1037,12 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                     .target_location = state.player.entity.target_location,
                     .flip_x = flip_player_sprite,
                     .casts_shadow = true,
-                });
+                }) catch {
+                    platform.trace("warning: failed to push sprite. no space left");
+                };
             }
 
-            // draw fire
+            // push fire sprites
             for (state.fire) |*fire| {
                 if (fire.entity.health <= 0) {
                     continue;
@@ -976,7 +1054,9 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                         .draw_colours = 0x40,
                         .location = fire.entity.location,
                         .target_location = fire.entity.target_location,
-                    });
+                    }) catch {
+                        platform.trace("warning: failed to push sprite. no space left");
+                    };
                 }
 
                 if (fire.path.length > 1) {
@@ -987,20 +1067,24 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                             .draw_colours = 0x40,
                             .location = location,
                             .target_location = location,
-                        });
+                        }) catch {
+                            platform.trace("warning: failed to push sprite. no space left");
+                        };
                     }
                 }
             }
 
             gfx.draw_world(state, camera_screen_pos);
 
-            gfx.draw_shadows(sprite_list, camera_screen_pos, animation_frame);
+            gfx.sprite_list_draw_shadows(&sprite_list, camera_screen_pos, animation_frame);
 
             if (state.turn_state == .aim) {
                 gfx.draw_tile_markers(state, camera_screen_pos);
             }
 
-            sprite_list.draw(camera_screen_pos, animation_frame);
+            gfx.sprite_list_draw(&sprite_list, camera_screen_pos, animation_frame);
+
+            gfx.sprite_list_draw_decorations(&sprite_list, camera_screen_pos, animation_frame);
 
             gfx.draw_hud(state, camera_screen_pos);
 
@@ -1041,7 +1125,16 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                         .location = enemy.entity.location,
                         .target_location = enemy.entity.target_location,
                         .casts_shadow = true,
-                    });
+                        .decoration_texture = switch (kind) {
+                            .charge_monster => switch (enemy.entity.state) {
+                                .charge => gfx.Texture.alert_marker,
+                                else => null,
+                            },
+                            else => null,
+                        },
+                    }) catch {
+                        platform.trace("warning: failed to push sprite. no space left");
+                    };
                 }
             }
         }
