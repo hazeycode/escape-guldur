@@ -9,9 +9,9 @@ repository = "https://github.com/hazeycode/escape-guldur/"
 name = "game"
 source = "game.wasm"
 abi = "wasm4"
-interfaces = { wasm4 = "2.5.3" }
+interfaces = { wasm4 = "0.0.1" }
 
 [[command]]
-runner = "wasm4@2.5.3"
+runner = "wasm4@0.0.1"
 name = "play"
 module = "game"
