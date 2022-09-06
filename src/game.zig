@@ -74,8 +74,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             _: u2 = 0,
 
             pub fn any_pressed(self: @This()) bool {
-                const sum = self.left + self.right + self.up + self.down + self.action_1 + self.action_2;
-                return (sum > 0);
+                return (self.left > 0 or self.right > 0 or self.up > 0 or self.down > 0 or self.action_1 > 0 or self.action_2 > 0);
             }
         };
 
@@ -1142,8 +1141,6 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             } else {
                 gfx.draw_hud(state, camera_screen_pos);
             }
-
-            platform.tracef("frame #d complete", gfx.frame_counter);
         }
 
         fn push_enemy_sprites(
@@ -1200,7 +1197,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
         fn controls_screen(input: anytype) void {
             gfx.draw_controls();
 
-            if (input.action_1 + input.action_2 > 0) {
+            if (input.action_1 > 0 or input.action_2 > 0) {
                 sfx.walk();
                 screen = .title;
                 platform.trace("return to title screen");
