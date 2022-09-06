@@ -23,6 +23,9 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
         var anim_start_frame: usize = 0;
         var camera_location: world.Location = undefined;
         var camera_screen_pos: gfx.ScreenPosition = undefined;
+        var player_level_starting_health: [6]i8 = .{ starting_player_health, 0, 0, 0, 0, 0 };
+        var player_level_starting_items: [6]u8 = .{ 0b1, 0, 0, 0, 0, 0 };
+        var player_level_starting_active_item: [6]Player.Item = .{.fists} ** 6;
 
         pub var input_queue = struct {
             inputs: [8]ButtonPressEvent = undefined,
@@ -447,6 +450,9 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                 if (state.level < data.levels.len) {
                     platform.trace("load next level");
                     state.load_level(state.level);
+                    player_level_starting_health[state.level] = state.player.entity.health;
+                    player_level_starting_items[state.level] = state.player.items;
+                    player_level_starting_active_item[state.level] = state.player.active_item;
                 }
                 return;
             }
@@ -1247,15 +1253,16 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                 0 => {
                     screen = .game;
                     menu_option = 0;
-                    state.reset();
                     state.load_level(0);
                 },
                 else => {
                     if (input.action_1 > 0) {
                         screen = .game;
                         defer menu_option = 0;
-                        state.reset();
                         state.load_level(menu_option);
+                        state.player.entity.health = player_level_starting_health[menu_option];
+                        state.player.items = player_level_starting_items[menu_option];
+                        state.player.active_item = player_level_starting_active_item[menu_option];
                     }
 
                     if (input.up > 0 or input.right > 0) {
