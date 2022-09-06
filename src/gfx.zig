@@ -394,51 +394,44 @@ pub fn draw_reload_screen(state: anytype, menu_option: *u8) void {
     var y: i32 = 12;
     w4_ext.text_centered("RELOAD", y);
     y += 8 * 3;
-    if (state.level >= 6) {
-        w4_ext.text_centered(
-            if (menu_option.* == 6) "> Level 6 <" else "Level 6",
-            y,
-        );
-        y += 8 + 4;
-    }
     if (state.level >= 5) {
         w4_ext.text_centered(
-            if (menu_option.* == 5) "> Level 5 <" else "Level 5",
+            if (menu_option.* == 5) "> Level 6 <" else "Level 6",
             y,
         );
         y += 8 + 4;
     }
     if (state.level >= 4) {
         w4_ext.text_centered(
-            if (menu_option.* == 4) "> Level 4 <" else "Level 4",
+            if (menu_option.* == 4) "> Level 5 <" else "Level 5",
             y,
         );
         y += 8 + 4;
     }
     if (state.level >= 3) {
         w4_ext.text_centered(
-            if (menu_option.* == 3) "> Level 3 <" else "Level 3",
+            if (menu_option.* == 3) "> Level 4 <" else "Level 4",
             y,
         );
         y += 8 + 4;
     }
     if (state.level >= 2) {
         w4_ext.text_centered(
-            if (menu_option.* == 2) "> Level 2 <" else "Level 2",
+            if (menu_option.* == 2) "> Level 3 <" else "Level 3",
             y,
         );
         y += 8 + 4;
     }
     if (state.level >= 1) {
         w4_ext.text_centered(
-            if (menu_option.* == 1) "> Level 1 <" else "Level 1",
+            if (menu_option.* == 1) "> Level 2 <" else "Level 2",
             y,
         );
         y += 8 + 4;
     }
     if (state.level >= 0) {
         w4_ext.text_centered(
-            if (menu_option.* == 0) "> Level 0 <" else "Level 0",
+            if (menu_option.* == 0) "> Level 1 <" else "Level 1",
             y,
         );
         y += 8 + 4;
