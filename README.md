@@ -39,6 +39,8 @@ w4 run zig-out/lib/opt.wasm
 ## Distribution
 
 ```shell
-w4 bundle zig-out/lib/opt.wasm --title "Escape Guldur" --html index.html
-
+cp zig-out/lib.opt.wasm game.wasm
+wapm login
+wapm publish
+w4 bundle game.wasm --title "Escape Guldur" --html escape_guldur.html
 ```
