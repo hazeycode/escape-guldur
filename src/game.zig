@@ -332,6 +332,17 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             return null;
         }
 
+        fn entities_test_will_collide(entities: anytype, location: world.Location) ?*Entity {
+            for (entities) |*e| {
+                if (e.entity.health > 0 and
+                    e.entity.target_location.eql(location))
+                {
+                    return &e.entity;
+                }
+            }
+            return null;
+        }
+
         fn try_cycle_item(state: *State) void {
             platform.trace("cycle item");
 
@@ -431,10 +442,6 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
         fn respond_to_move(state: *State) void {
             platform.trace("responding to move...");
 
-            defer {
-                update_world_lightmap(state);
-            }
-
             if (world.map_get_tile_kind(state.world_map, state.player.entity.location) == .door) {
                 state.level += 1;
                 if (state.level < data.levels.len) {
@@ -465,10 +472,10 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                         return false;
                     }
 
-                    if (entities_try_hit(&state.monsters, location) orelse
-                        entities_try_hit(&state.fire_monsters, location) orelse
-                        entities_try_hit(&state.charge_monsters, location) orelse
-                        entities_try_hit(&state.pickups, location)) |_|
+                    if (entities_test_will_collide(&state.monsters, location) orelse
+                        entities_test_will_collide(&state.fire_monsters, location) orelse
+                        entities_test_will_collide(&state.charge_monsters, location) orelse
+                        entities_test_will_collide(&state.pickups, location)) |_|
                     {
                         return false;
                     }
@@ -956,6 +963,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                         entities_apply_pending_damage(&state.charge_monsters);
 
                         respond_to_move(state);
+                        update_world_lightmap(state);
                         state.player.entity.state = .idle;
                         anim_start_frame = gfx.frame_counter;
                         state.turn_state = .response;
@@ -1236,6 +1244,6 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
     };
 }
 
-// Tests
+//// Tests //////////////////////////////////////////////////////////
 
 const testing = std.testing;
