@@ -205,7 +205,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                     }
                 }
 
-                update_world_lightmap(self);
+                update_world_visibilty(self);
             }
         };
 
@@ -794,9 +794,9 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             }
         }
 
-        fn update_world_lightmap(state: *State) void {
-            platform.trace("update world lightmap");
-            defer platform.trace("lightmap updated");
+        fn update_world_visibilty(state: *State) void {
+            platform.trace("update world visibilty");
+            defer platform.trace("world visibilty updated");
 
             var location: world.Location = .{ .x = 0, .y = 0 };
             while (location.x < world.size_x) : (location.x += 1) {
@@ -963,7 +963,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                         entities_apply_pending_damage(&state.charge_monsters);
 
                         respond_to_move(state);
-                        update_world_lightmap(state);
+                        update_world_visibilty(state);
                         state.player.entity.state = .idle;
                         anim_start_frame = gfx.frame_counter;
                         state.turn_state = .response;
@@ -1062,10 +1062,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
             // push pickup sprites
             for (state.pickups) |*pickup| {
-                if (pickup.entity.health > 0 and world.map_get_tile(
-                    state.world_vis_map,
-                    pickup.entity.location,
-                ) > 0) {
+                if (pickup.entity.health > 0) {
                     sprite_list.push(.{
                         .texture = switch (pickup.kind) {
                             .health => gfx.Texture.heart,
@@ -1129,15 +1126,15 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
 
             gfx.draw_world(state, camera_screen_pos);
 
-            gfx.sprite_list_draw_shadows(&sprite_list, camera_screen_pos, animation_frame);
+            gfx.sprite_list_draw_shadows(&sprite_list, camera_screen_pos, animation_frame, state.world_vis_map);
 
             if (state.turn_state == .aim) {
                 gfx.draw_tile_markers(state, camera_screen_pos);
             }
 
-            gfx.sprite_list_draw(&sprite_list, camera_screen_pos, animation_frame);
+            gfx.sprite_list_draw(&sprite_list, camera_screen_pos, animation_frame, state.world_vis_map);
 
-            gfx.sprite_list_draw_decorations(&sprite_list, camera_screen_pos, animation_frame);
+            gfx.sprite_list_draw_decorations(&sprite_list, camera_screen_pos, animation_frame, state.world_vis_map);
 
             if (state.turn_state == .dead) {
                 gfx.draw_transparent_overlay();
@@ -1145,6 +1142,8 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             } else {
                 gfx.draw_hud(state, camera_screen_pos);
             }
+
+            platform.tracef("frame #d complete", gfx.frame_counter);
         }
 
         fn push_enemy_sprites(
@@ -1157,9 +1156,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                 .fire_monster => state.fire_monsters[0..],
                 .charge_monster => state.charge_monsters[0..],
             }) |*enemy| {
-                if (enemy.entity.health > 0 and
-                    world.map_get_tile(state.world_vis_map, enemy.entity.location) > 0)
-                {
+                if (enemy.entity.health > 0) {
                     sprite_list.push(.{
                         .texture = switch (kind) {
                             .monster => gfx.Texture.monster,

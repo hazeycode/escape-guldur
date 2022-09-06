@@ -14,6 +14,8 @@ pub const screen_px_width = w4.SCREEN_SIZE;
 pub const screen_px_height = w4.SCREEN_SIZE;
 pub const tile_px_width = 10;
 pub const tile_px_height = 9;
+pub const world_px_width = tile_px_width * screen_px_width;
+pub const world_px_height = tile_px_width * screen_px_height;
 pub const max_sprites = 64;
 pub const move_animation_frames = 3;
 
@@ -49,8 +51,15 @@ pub fn init() void {
 
 pub fn world_to_screen(location: world.Location) ScreenPosition {
     return .{
-        .x = location.x * tile_px_width + w4.SCREEN_SIZE / 2,
-        .y = location.y * tile_px_height + w4.SCREEN_SIZE / 2,
+        .x = location.x * tile_px_width + screen_px_width / 2,
+        .y = location.y * tile_px_height + screen_px_height / 2,
+    };
+}
+
+pub fn screen_to_world(position: ScreenPosition) world.Location {
+    return .{
+        .x = @intCast(i16, @divTrunc(position.x - screen_px_width / 2, tile_px_width)),
+        .y = @intCast(i16, @divTrunc(position.y - screen_px_height / 2, tile_px_height)),
     };
 }
 
@@ -86,25 +95,31 @@ pub fn sprite_list_draw(
     sprite_list: *SpriteList,
     camera_position: ScreenPosition,
     animation_frame: usize,
+    visibilty_map: anytype,
 ) void {
     for (sprite_list.all()) |sprite| {
-        w4.DRAW_COLORS.* = sprite.draw_colours;
-        var flags = w4.BLIT_1BPP;
-        if (sprite.flip_x) flags |= w4.BLIT_FLIP_X;
         const screen_pos = lerp(
             sprite.location,
             sprite.target_location,
             animation_frame,
             move_animation_frames,
         ).sub(camera_position);
-        w4.blit(
-            sprite.texture.bytes,
-            screen_pos.x + (tile_px_width - sprite.texture.width) / 2,
-            screen_pos.y - sprite.texture.height / 2,
-            sprite.texture.width,
-            sprite.texture.height,
-            flags,
-        );
+        if (world.map_get_tile(
+            visibilty_map,
+            screen_to_world(screen_pos.add(camera_position)),
+        ) > 0) {
+            w4.DRAW_COLORS.* = sprite.draw_colours;
+            var flags = w4.BLIT_1BPP;
+            if (sprite.flip_x) flags |= w4.BLIT_FLIP_X;
+            w4.blit(
+                sprite.texture.bytes,
+                screen_pos.x + (tile_px_width - sprite.texture.width) / 2,
+                screen_pos.y - sprite.texture.height / 2,
+                sprite.texture.width,
+                sprite.texture.height,
+                flags,
+            );
+        }
     }
 }
 
@@ -112,6 +127,7 @@ pub fn sprite_list_draw_shadows(
     sprite_list: *SpriteList,
     camera_position: ScreenPosition,
     animation_frame: usize,
+    visibilty_map: anytype,
 ) void {
     for (sprite_list.all()) |sprite| {
         if (sprite.casts_shadow) {
@@ -121,13 +137,18 @@ pub fn sprite_list_draw_shadows(
                 animation_frame,
                 move_animation_frames,
             ).sub(camera_position);
-            w4.DRAW_COLORS.* = 0x11;
-            w4.oval(
-                screen_pos.x + 2,
-                screen_pos.y + tile_px_height / 2,
-                tile_px_width - 4,
-                2,
-            );
+            if (world.map_get_tile(
+                visibilty_map,
+                screen_to_world(screen_pos.add(camera_position)),
+            ) > 0) {
+                w4.DRAW_COLORS.* = 0x11;
+                w4.oval(
+                    screen_pos.x + 2,
+                    screen_pos.y + tile_px_height / 2,
+                    tile_px_width - 4,
+                    2,
+                );
+            }
         }
     }
 }
@@ -136,6 +157,7 @@ pub fn sprite_list_draw_decorations(
     sprite_list: *SpriteList,
     camera_position: ScreenPosition,
     animation_frame: usize,
+    visibilty_map: anytype,
 ) void {
     for (sprite_list.all()) |sprite| {
         if (sprite.decoration_texture) |decoration_texture| {
@@ -145,15 +167,20 @@ pub fn sprite_list_draw_decorations(
                 animation_frame,
                 move_animation_frames,
             ).sub(camera_position);
-            w4.DRAW_COLORS.* = 0x40;
-            w4.blit(
-                decoration_texture.bytes,
-                screen_pos.x + (tile_px_width - decoration_texture.width) / 2,
-                screen_pos.y - decoration_texture.height,
-                decoration_texture.width,
-                decoration_texture.height,
-                w4.BLIT_1BPP,
-            );
+            if (world.map_get_tile(
+                visibilty_map,
+                screen_to_world(screen_pos.add(camera_position)),
+            ) > 0) {
+                w4.DRAW_COLORS.* = 0x40;
+                w4.blit(
+                    decoration_texture.bytes,
+                    screen_pos.x + (tile_px_width - decoration_texture.width) / 2,
+                    screen_pos.y - decoration_texture.height,
+                    decoration_texture.width,
+                    decoration_texture.height,
+                    w4.BLIT_1BPP,
+                );
+            }
         }
     }
 }
