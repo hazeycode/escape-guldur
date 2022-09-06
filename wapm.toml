@@ -1,6 +1,6 @@
 [package]
 name = "hazeycode/escape-guldur"
-version = "0.1.1"
+version = "0.2.0"
 description = "Retro action-rpg game written in Zig"
 readme = "README.md"
 repository = "https://github.com/hazeycode/escape-guldur/"
@@ -9,9 +9,9 @@ repository = "https://github.com/hazeycode/escape-guldur/"
 name = "game"
 source = "game.wasm"
 abi = "wasm4"
-interfaces = { wasm4 = "0.0.1" }
+interfaces = { wasm4 = "2.5.3" }
 
 [[command]]
-runner = "wasm4@0.0.1"
+runner = "wasm4@2.5.3"
 name = "play"
 module = "game"
