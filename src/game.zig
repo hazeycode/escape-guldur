@@ -18,6 +18,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
         const starting_player_health = 5;
 
         var screen: Screen = .title;
+        var menu_option: u8 = 0;
         var flip_player_sprite = false;
         var anim_start_frame: usize = 0;
         var camera_location: world.Location = undefined;
@@ -857,7 +858,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                 .title => title_screen(state, input),
                 .controls => controls_screen(input),
                 .game => game_screen(state, input),
-                .reload => stats_screen(state, input, "YOU DIED", .title, null),
+                .reload => reload_screen(state, input),
                 .win => stats_screen(state, input, "YOU ESCAPED", .title, null),
             }
         }
@@ -865,6 +866,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
         fn game_screen(state: anytype, newest_input: anytype) void {
             if (state.level == data.levels.len) {
                 screen = .win;
+                menu_option = 0;
                 // state.game_elapsed_ns = state.timer.read();
                 return;
             }
@@ -1138,6 +1140,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             if (state.turn_state == .dead) {
                 gfx.draw_transparent_overlay();
                 stats_screen(state, newest_input, "YOU DIED", .reload, null);
+                menu_option = state.level;
             } else {
                 gfx.draw_hud(state, camera_screen_pos);
             }
@@ -1184,12 +1187,14 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             if (input.action_1 > 0) {
                 sfx.walk();
                 screen = .game;
+                menu_option = 0;
                 state.reset();
                 state.load_level(0);
                 platform.trace("start game");
             } else if (input.action_2 > 0) {
                 sfx.walk();
                 screen = .controls;
+                menu_option = 0;
                 platform.trace("show controls");
             }
         }
@@ -1200,6 +1205,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             if (input.action_1 > 0 or input.action_2 > 0) {
                 sfx.walk();
                 screen = .title;
+                menu_option = 0;
                 platform.trace("return to title screen");
             }
         }
@@ -1233,6 +1239,33 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
                     sfx.walk();
                     screen = retreat_screen;
                 }
+            }
+        }
+
+        fn reload_screen(state: anytype, input: anytype) void {
+            switch (state.level) {
+                0 => {
+                    screen = .game;
+                    menu_option = 0;
+                    state.reset();
+                    state.load_level(0);
+                },
+                else => {
+                    if (input.action_1 > 0) {
+                        screen = .game;
+                        defer menu_option = 0;
+                        state.reset();
+                        state.load_level(menu_option);
+                    }
+
+                    if (input.up > 0 or input.right > 0) {
+                        menu_option = if (menu_option == state.level) 0 else menu_option + 1;
+                    } else if (input.down > 0 or input.left > 0) {
+                        menu_option = if (menu_option == 0) state.level else menu_option - 1;
+                    }
+
+                    gfx.draw_reload_screen(state, &menu_option);
+                },
             }
         }
     };

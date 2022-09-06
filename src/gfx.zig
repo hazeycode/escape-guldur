@@ -376,6 +376,7 @@ pub fn draw_title_menu() void {
 
 pub fn draw_controls() void {
     draw_menu_bg();
+    draw_transparent_overlay();
 
     w4.DRAW_COLORS.* = 0x04;
     w4_ext.text_centered("CONTROLS", 12);
@@ -385,6 +386,63 @@ pub fn draw_controls() void {
     w4.text("  use item", 10, 50 + (8 + 1) * 5);
     w4.text("\x81 cycle item /", 10, 50 + (8 + 1) * 8);
     w4.text("  cancel aim", 10, 50 + (8 + 1) * 9);
+}
+
+pub fn draw_reload_screen(state: anytype, menu_option: *u8) void {
+    // TODO(hazeycode): rewrite
+    w4.DRAW_COLORS.* = 0x04;
+    var y: i32 = 12;
+    w4_ext.text_centered("RELOAD", y);
+    y += 8 * 3;
+    if (state.level >= 6) {
+        w4_ext.text_centered(
+            if (menu_option.* == 6) "> Level 6 <" else "Level 6",
+            y,
+        );
+        y += 8 + 4;
+    }
+    if (state.level >= 5) {
+        w4_ext.text_centered(
+            if (menu_option.* == 5) "> Level 5 <" else "Level 5",
+            y,
+        );
+        y += 8 + 4;
+    }
+    if (state.level >= 4) {
+        w4_ext.text_centered(
+            if (menu_option.* == 4) "> Level 4 <" else "Level 4",
+            y,
+        );
+        y += 8 + 4;
+    }
+    if (state.level >= 3) {
+        w4_ext.text_centered(
+            if (menu_option.* == 3) "> Level 3 <" else "Level 3",
+            y,
+        );
+        y += 8 + 4;
+    }
+    if (state.level >= 2) {
+        w4_ext.text_centered(
+            if (menu_option.* == 2) "> Level 2 <" else "Level 2",
+            y,
+        );
+        y += 8 + 4;
+    }
+    if (state.level >= 1) {
+        w4_ext.text_centered(
+            if (menu_option.* == 1) "> Level 1 <" else "Level 1",
+            y,
+        );
+        y += 8 + 4;
+    }
+    if (state.level >= 0) {
+        w4_ext.text_centered(
+            if (menu_option.* == 0) "> Level 0 <" else "Level 0",
+            y,
+        );
+        y += 8 + 4;
+    }
 }
 
 pub fn draw_text_number(number: anytype, x: i32, y: i32) u16 {
