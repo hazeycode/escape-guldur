@@ -12,6 +12,11 @@ A retro action-RPG written in [Zig](https://ziglang.org/) for the [WASM-4 fantas
 - [WASM-4](https://wasm4.org/docs/getting-started/setup)
 - [wasm-opt](https://www.npmjs.com/package/wasm-opt)
 
+Build and run all tests with:
+```shell
+zig build test
+```
+
 Build (debug) the cart (zig-out/lib/cart.wasm) by running:
 
 ```shell
