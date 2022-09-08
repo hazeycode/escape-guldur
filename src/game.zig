@@ -26,6 +26,7 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
         var player_level_starting_health: [6]i8 = .{ starting_player_health, 0, 0, 0, 0, 0 };
         var player_level_starting_items: [6]u8 = .{ 0b1, 0, 0, 0, 0, 0 };
         var player_level_starting_active_item: [6]Player.Item = .{.fists} ** 6;
+        var game_state: State = .{};
 
         pub var input_queue = struct {
             inputs: [8]ButtonPressEvent = undefined,
@@ -859,13 +860,13 @@ pub fn Game(gfx: anytype, sfx: anytype, platform: anytype, data: anytype) type {
             }
         }
 
-        pub fn update(state: anytype, input: anytype) void {
+        pub fn update(input: anytype) void {
             switch (screen) {
-                .title => title_screen(state, input),
+                .title => title_screen(&game_state, input),
                 .controls => controls_screen(input),
-                .game => game_screen(state, input),
-                .reload => reload_screen(state, input),
-                .win => stats_screen(state, input, "YOU ESCAPED", .title, null),
+                .game => game_screen(&game_state, input),
+                .reload => reload_screen(&game_state, input),
+                .win => stats_screen(&game_state, input, "YOU ESCAPED", .title, null),
             }
         }
 

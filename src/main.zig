@@ -16,7 +16,6 @@ const platform = struct {
 
 const game = @import("game.zig").Game(gfx, sfx, platform, data);
 
-var state = game.State{};
 var prev_gamepad: u8 = 0;
 
 export fn start() void {
@@ -37,7 +36,7 @@ export fn update() void {
         .action_2 = if (pressed & w4.BUTTON_2 > 0) 1 else 0,
     };
 
-    game.update(&state, input);
+    game.update(input);
 
     gfx.frame_counter += 1;
 }
