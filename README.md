@@ -8,7 +8,7 @@ A retro action-RPG written in [Zig](https://ziglang.org/) for the [WASM-4 fantas
 ## Building
 
 #### Requirements
-- [Zig 0.9.1](https://github.com/ziglang/zig/releases/tag/0.9.1)
+- [Zig](https://github.com/ziglang/zig) 0.10.0-dev.4060+61aaef0b0 tested
 - [WASM-4](https://wasm4.org/docs/getting-started/setup)
 - [wasm-opt](https://www.npmjs.com/package/wasm-opt)
 
