@@ -3,9 +3,8 @@ const sqrt = std.math.sqrt;
 var rng = std.rand.DefaultPrng.init(42);
 
 const platform = @import("platform");
-const gfx = platform.gfx;
-const sfx = platform.sfx;
-
+const gfx = @import("gfx");
+const sfx = @import("sfx");
 const data = @import("data");
 
 const util = @import("util.zig");
@@ -13,7 +12,7 @@ const quicksort = util.quicksort;
 const StaticList = util.StaticList;
 
 const world = @import("world.zig");
-const WorldMap = world.Map(world.size_x, world.size_y);
+const WorldMap = world.Map(world.map_columns, world.map_rows);
 
 const bresenham_line = @import("bresenham.zig").line;
 
@@ -25,8 +24,8 @@ var screen: Screen = .title;
 var menu_option: u8 = 0;
 var flip_player_sprite = false;
 var anim_start_frame: usize = 0;
-var camera_location: world.Location = undefined;
-var camera_screen_pos: gfx.ScreenPosition = undefined;
+var camera_location = world.MapLocation{ .x = 0, .y = 0 };
+var camera_world_pos = world.Position{ .x = 0, .y = 0, .z = 0 };
 var player_level_starting_health: [6]i8 = .{ starting_player_health, 0, 0, 0, 0, 0 };
 var player_level_starting_items: [6]u8 = .{ 0b1, 0, 0, 0, 0, 0 };
 var player_level_starting_active_item: [6]Player.Item = .{.fists} ** 6;
@@ -83,15 +82,20 @@ pub const ButtonPressEvent = packed struct {
     _: u2 = 0,
 
     pub fn any_pressed(self: @This()) bool {
-        return (self.left > 0 or self.right > 0 or self.up > 0 or self.down > 0 or self.action_1 > 0 or self.action_2 > 0);
+        return (self.left > 0 or
+            self.right > 0 or
+            self.up > 0 or
+            self.down > 0 or
+            self.action_1 > 0 or
+            self.action_2 > 0);
     }
 };
 
 pub const Screen = enum { title, controls, game, reload, win };
 
 const Entity = struct {
-    location: world.Location = world.Location{ .x = 0, .y = 0 },
-    target_location: world.Location = world.Location{ .x = 0, .y = 0 },
+    location: world.MapLocation = world.MapLocation{ .x = 0, .y = 0 },
+    target_location: world.MapLocation = world.MapLocation{ .x = 0, .y = 0 },
     cooldown: u8 = 0,
     health: i8,
     pending_damage: u4 = 0,
@@ -99,7 +103,7 @@ const Entity = struct {
     state: enum { idle, walk, melee_attack, charge } = .idle,
     look_direction: world.Direction,
 
-    pub fn set_location(self: *@This(), location: world.Location) void {
+    pub fn set_location(self: *@This(), location: world.MapLocation) void {
         self.location = location;
         self.target_location = location;
     }
@@ -154,7 +158,7 @@ pub const State = struct {
     turn: u32 = 0,
     level: u8 = 0,
     action_target: u8 = 0,
-    action_targets: StaticList(world.Location, 16) = .{},
+    action_targets: StaticList(world.MapLocation, 16) = .{},
     world_map: WorldMap = undefined,
     world_vis_map: WorldMap = undefined,
     player: Player = undefined,
@@ -194,10 +198,10 @@ pub const State = struct {
         for (self.pickups) |*pickup| pickup.entity.health = 0;
 
         // find spawners on level map and spawn things at those locations
-        var location: world.Location = .{ .x = 0, .y = 0 };
-        while (location.x < world.size_x) : (location.x += 1) {
+        var location: world.MapLocation = .{ .x = 0, .y = 0 };
+        while (location.x < world.map_columns) : (location.x += 1) {
             defer location.y = 0;
-            while (location.y < world.size_y) : (location.y += 1) {
+            while (location.y < world.map_rows) : (location.y += 1) {
                 switch (world.map_get_tile_kind(self.world_map, location)) {
                     .player_spawn => {
                         self.player.entity.set_location(location);
@@ -217,7 +221,7 @@ pub const State = struct {
     }
 };
 
-fn spawn_enemy(pool: anytype, location: world.Location, health: u4) void {
+fn spawn_enemy(pool: anytype, location: world.MapLocation, health: u4) void {
     for (pool) |*enemy| {
         if (enemy.entity.health <= 0) {
             enemy.entity.set_location(location);
@@ -230,7 +234,7 @@ fn spawn_enemy(pool: anytype, location: world.Location, health: u4) void {
     platform.trace("warning: enemy not spawned. no free space");
 }
 
-fn spawn_pickup(state: *State, location: world.Location, kind: anytype) void {
+fn spawn_pickup(state: *State, location: world.MapLocation, kind: anytype) void {
     for (state.pickups) |*pickup| {
         if (pickup.entity.health <= 0) {
             pickup.entity.set_location(location);
@@ -252,12 +256,14 @@ fn spawn_fire(state: *State, path: *world.Path) void {
                 fire.entity.location = location;
                 if (path.pop()) |next_location| {
                     fire.entity.target_location = next_location;
+                    fire.path.push(next_location) catch {
+                        platform.trace("error: failed to queue fire path. no space left");
+                        unreachable;
+                    };
                 }
                 while (path.pop()) |future_location| {
                     fire.path.push(future_location) catch {
-                        platform.trace(
-                            "error: failed to queue fire path. no space left",
-                        );
+                        platform.trace("error: failed to queue fire path. no space left");
                         unreachable;
                     };
                 }
@@ -270,7 +276,7 @@ fn spawn_fire(state: *State, path: *world.Path) void {
     platform.trace("warning: fire not spawned. empty path");
 }
 
-fn try_move(state: *State, location: world.Location) void {
+fn try_move(state: *State, location: world.MapLocation) void {
     switch (world.map_get_tile_kind(state.world_map, location)) {
         .wall, .breakable_wall => {
             // you shall not pass!
@@ -317,7 +323,7 @@ fn try_move(state: *State, location: world.Location) void {
     }
 }
 
-fn try_hit_enemy(state: *State, location: world.Location) bool {
+fn try_hit_enemy(state: *State, location: world.MapLocation) bool {
     if (entities_try_hit(&state.monsters, location) orelse
         entities_try_hit(&state.fire_monsters, location) orelse
         entities_try_hit(&state.charge_monsters, location)) |entity|
@@ -329,7 +335,7 @@ fn try_hit_enemy(state: *State, location: world.Location) bool {
     return false;
 }
 
-fn entities_try_hit(entities: anytype, location: world.Location) ?*Entity {
+fn entities_try_hit(entities: anytype, location: world.MapLocation) ?*Entity {
     for (entities) |*e| {
         if (e.entity.health > 0 and
             e.entity.location.eql(location))
@@ -340,7 +346,7 @@ fn entities_try_hit(entities: anytype, location: world.Location) ?*Entity {
     return null;
 }
 
-fn entities_test_will_collide(entities: anytype, location: world.Location) ?*Entity {
+fn entities_test_will_collide(entities: anytype, location: world.MapLocation) ?*Entity {
     for (entities) |*e| {
         if (e.entity.health > 0 and
             e.entity.target_location.eql(location))
@@ -385,7 +391,11 @@ fn find_action_targets(state: *State) !void {
                 const targets = state.action_targets.all();
                 var distance_comparitor = struct {
                     state: *State,
-                    pub fn compare(self: @This(), a: world.Location, b: world.Location) bool {
+                    pub fn compare(
+                        self: @This(),
+                        a: world.MapLocation,
+                        b: world.MapLocation,
+                    ) bool {
                         const da = self.state.player.entity.location.manhattan_to(a);
                         const db = self.state.player.entity.location.manhattan_to(b);
                         return da < db;
@@ -424,7 +434,7 @@ fn find_ranged_targets(state: *State, potential_targets: anytype) !void {
     }
 }
 
-fn test_can_ranged_attack(state: *State, location: world.Location) bool {
+fn test_can_ranged_attack(state: *State, location: world.MapLocation) bool {
     const d = state.player.entity.location.manhattan_to(location);
     if (d < 9) {
         const res = world.check_line_of_sight(
@@ -469,7 +479,7 @@ fn respond_to_move(state: *State) void {
 }
 
 /// Returns true if the location is not occupied by a blocking tile or blocking entity
-fn test_walkable(state: *State, location: world.Location) bool {
+fn test_walkable(state: *State, location: world.MapLocation) bool {
     platform.trace("test location walkable...");
 
     const kind = world.map_get_tile_kind(state.world_map, location);
@@ -496,7 +506,11 @@ fn test_walkable(state: *State, location: world.Location) bool {
     return true;
 }
 
-fn update_enemies(enemies: anytype, state: *State, update_fn: fn (*State, *Enemy) void) void {
+fn update_enemies(
+    enemies: anytype,
+    state: *State,
+    comptime update_fn: fn (*State, *Enemy) void,
+) void {
     for (enemies) |*enemy| {
         if (enemy.entity.cooldown > 0) {
             enemy.entity.cooldown -= 1;
@@ -532,7 +546,7 @@ fn update_monster(state: *State, monster: *Enemy) void {
                 possible_location.y += @divTrunc(dy, dy);
             }
         } else {
-            platform.trace("monster: on diagonal (roll dice)");
+            platform.trace("monster: on diagonal, roll dice");
             switch (rng.random().int(u1)) {
                 0 => possible_location.x += @divTrunc(dx, dx),
                 1 => possible_location.y += @divTrunc(dy, dy),
@@ -555,16 +569,11 @@ fn update_monster(state: *State, monster: *Enemy) void {
             platform.trace("monster: chase player!");
 
             { // find a walkable tile that gets closer to player
-                const possible_locations: [4]world.Location = .{
-                    monster.entity.location.north(1),
-                    monster.entity.location.east(1),
-                    monster.entity.location.south(1),
-                    monster.entity.location.west(1),
-                };
-                for (&possible_locations) |new_location| {
-                    if (test_walkable(state, new_location)) {
-                        if (new_location.manhattan_to(state.player.entity.location) < manhattan_dist) {
-                            monster.entity.target_location = new_location;
+                for (world.Direction.all_orthogonal) |dir| {
+                    const loc = monster.entity.location.walk(dir, 1);
+                    if (test_walkable(state, loc)) {
+                        if (loc.manhattan_to(state.player.entity.location) < manhattan_dist) {
+                            monster.entity.target_location = loc;
                             monster.entity.state = .walk;
                             break;
                         }
@@ -636,12 +645,12 @@ fn update_charge_monster(state: *State, monster: *Enemy) void {
             if (monster.path.pop()) |next_location| {
                 var plotter = struct {
                     game_state: *State,
-                    last_passable: ?world.Location = null,
+                    last_passable: ?world.MapLocation = null,
                     hit_impassable: bool = false,
                     player_hit: bool = false,
 
                     pub fn plot(self: *@This(), x: i32, y: i32) bool {
-                        const location = world.Location{ .x = @intCast(u8, x), .y = @intCast(u8, y) };
+                        const location = world.MapLocation{ .x = @intCast(u8, x), .y = @intCast(u8, y) };
                         switch (world.map_get_tile_kind(self.game_state.world_map, location)) {
                             .wall => {
                                 self.hit_impassable = true;
@@ -702,13 +711,9 @@ fn update_charge_monster(state: *State, monster: *Enemy) void {
                                 1,
                             );
                             // TODO(hazeycode): pick a random available location instead of trying in arbitary order?
-                            // TODO(hazeycode): test collision with other enemies and push them back
-                            for ([_]world.Location{
-                                monster.entity.target_location.north(1),
-                                monster.entity.target_location.east(1),
-                                monster.entity.target_location.south(1),
-                                monster.entity.target_location.west(1),
-                            }) |possible_location| {
+                            // TODO(hazeycode): test collision with other enemies and push them out of the way?
+                            for (world.Direction.all_orthogonal) |possible_dir| {
+                                const possible_location = monster.entity.target_location.walk(possible_dir, 1);
                                 if (possible_location.eql(location_behind_monster)) {
                                     continue;
                                 }
@@ -767,36 +772,26 @@ fn charge_monster_begin_charge(monster: *Enemy, dir: world.Direction, dist: u16)
 
 fn update_fire(state: *State, fire: *Enemy) void {
     if (fire.path.pop()) |next_location| {
-        platform.trace("fire walk path");
-        fire.entity.state = .walk;
         fire.entity.target_location = next_location;
-
-        if (world.map_get_tile_kind(state.world_map, fire.entity.location) != .wall) {
-            if (fire.entity.target_location.eql(state.player.entity.location)) {
-                platform.trace("fire hit player!");
-                state.player.entity.pending_damage += 1;
-            }
+        fire.entity.state = .walk;
+        
+        if (fire.entity.target_location.eql(state.player.entity.location)) {
+            platform.trace("fire hit player!");
+            state.player.entity.pending_damage += 1;
         }
-        return;
     }
-
-    fire.entity.state = .idle;
-    fire.entity.health = 0;
-    fire.path.length = 0;
-
-    platform.trace("fire extinguished");
+    else {
+        fire.entity.state = .idle;
+        fire.entity.health = 0;
+        platform.trace("fire extinguished");
+    }
 }
 
 /// finds walkable adjacent tile or ramains still (random walk)
 fn random_walk(state: *State, entity: *Entity) void {
-    const ortho_locations = [_]world.Location{
-        entity.location.north(1),
-        entity.location.east(1),
-        entity.location.south(1),
-        entity.location.west(1),
-    };
+    const ortho_dirs = world.Direction.all_orthogonal;
     const random_index = @mod(rng.random().int(usize), 4);
-    const location = ortho_locations[random_index];
+    const location = entity.location.walk(ortho_dirs[random_index], 1);
     if (test_walkable(state, location)) {
         entity.target_location = location;
         entity.state = .walk;
@@ -809,10 +804,10 @@ fn update_world_visibilty(state: *State) void {
     platform.trace("update world visibilty");
     defer platform.trace("world visibilty updated");
 
-    var location: world.Location = .{ .x = 0, .y = 0 };
-    while (location.x < world.size_x) : (location.x += 1) {
+    var location: world.MapLocation = .{ .x = 0, .y = 0 };
+    while (location.x < world.map_columns) : (location.x += 1) {
         defer location.y = 0;
-        while (location.y < world.size_y) : (location.y += 1) {
+        while (location.y < world.map_rows) : (location.y += 1) {
             world.map_set_tile(&state.world_vis_map, location, 0);
             if (state.player.entity.location.manhattan_to(location) < 9 and
                 world.check_line_of_sight(
@@ -974,7 +969,7 @@ fn game_screen(state: anytype, newest_input: anytype) void {
                         state.player.entity.target_location = state.player.entity.location;
                     },
                 }
-
+                          
                 entities_apply_pending_damage(&state.monsters);
                 entities_apply_pending_damage(&state.fire_monsters);
                 entities_apply_pending_damage(&state.charge_monsters);
@@ -1022,40 +1017,38 @@ fn game_screen(state: anytype, newest_input: anytype) void {
         else => 0,
     };
 
-    // update camera location
-    if (state.turn_state == .aim and state.action_targets.length > 0) {
-        // move to aim target
-        if (animation_frame <= gfx.move_animation_frames) {
-            camera_screen_pos = gfx.lerp(
-                camera_location,
-                state.action_targets.get(state.action_target) catch {
+    { // update camera
+        if (state.turn_state == .aim and state.action_targets.length > 0) {
+            // move to aim target
+            if (animation_frame <= gfx.move_animation_frames) {
+                // TODO: Move to gfx_wasm4.zig
+                const target_location = state.action_targets.get(state.action_target) catch {
                     platform.trace("error: failed to get action target");
                     unreachable;
-                },
+                };
+                camera_world_pos = world.Position.from_map_location(camera_location, 0).lerp_to(
+                    world.Position.from_map_location(target_location, 0),
+                    animation_frame,
+                    gfx.move_animation_frames,
+                );
+            } else {
+                // TODO: Move to gfx_wasm4.zig
+                camera_location = state.action_targets.get(state.action_target) catch {
+                    platform.trace("error: failed to get action target");
+                    unreachable;
+                };
+                camera_world_pos = world.Position.from_map_location(camera_location, 0);
+            }
+        } else {
+            // follow player
+            // TODO: Move to gfx_wasm4.zig
+            camera_location = state.player.entity.location;
+            camera_world_pos = world.Position.from_map_location(camera_location, 0).lerp_to(
+                world.Position.from_map_location(state.player.entity.target_location, 0),
                 animation_frame,
                 gfx.move_animation_frames,
-            ).sub(.{
-                .x = gfx.screen_px_width / 2,
-                .y = gfx.screen_px_height / 2,
-            });
-        } else {
-            camera_location = state.action_targets.get(state.action_target) catch {
-                platform.trace("error: failed to get action target");
-                unreachable;
-            };
+            );
         }
-    } else {
-        // follow player
-        camera_location = state.player.entity.location;
-        camera_screen_pos = gfx.lerp(
-            camera_location,
-            state.player.entity.target_location,
-            animation_frame,
-            gfx.move_animation_frames,
-        ).sub(.{
-            .x = gfx.screen_px_width / 2,
-            .y = gfx.screen_px_height / 2,
-        });
     }
 
     defer {
@@ -1073,9 +1066,9 @@ fn game_screen(state: anytype, newest_input: anytype) void {
 
     var sprite_list = gfx.SpriteList{};
 
-    push_enemy_sprites(&sprite_list, state, .monster);
-    push_enemy_sprites(&sprite_list, state, .fire_monster);
-    push_enemy_sprites(&sprite_list, state, .charge_monster);
+    push_enemy_sprites(&sprite_list, .monster, state.monsters);
+    push_enemy_sprites(&sprite_list, .fire_monster, state.fire_monsters);
+    push_enemy_sprites(&sprite_list, .charge_monster, state.charge_monsters);
 
     // push pickup sprites
     for (state.pickups) |*pickup| {
@@ -1087,8 +1080,11 @@ fn game_screen(state: anytype, newest_input: anytype) void {
                     .small_axe => gfx.Texture.small_axe,
                 },
                 .draw_colours = 0x40,
-                .location = pickup.entity.location,
-                .target_location = pickup.entity.target_location,
+                .world_position = world.Position.from_map_location(pickup.entity.location, 0),
+                .target_world_position = world.Position.from_map_location(
+                    pickup.entity.target_location,
+                    0,
+                ),
                 .casts_shadow = true,
             }) catch {
                 platform.trace("warning: failed to push sprite. no space left");
@@ -1100,8 +1096,11 @@ fn game_screen(state: anytype, newest_input: anytype) void {
         sprite_list.push(.{
             .texture = gfx.Texture.player,
             .draw_colours = if (state.player.entity.did_receive_damage) 0x40 else 0x20,
-            .location = state.player.entity.location,
-            .target_location = state.player.entity.target_location,
+            .world_position = world.Position.from_map_location(state.player.entity.location, 0),
+            .target_world_position = world.Position.from_map_location(
+                state.player.entity.target_location,
+                0,
+            ),
             .flip_x = flip_player_sprite,
             .casts_shadow = true,
         }) catch {
@@ -1115,63 +1114,73 @@ fn game_screen(state: anytype, newest_input: anytype) void {
             continue;
         }
 
-        if (world.map_get_tile(state.world_vis_map, fire.entity.location) > 0) {
+        sprite_list.push(.{
+            .texture = gfx.Texture.fire_big,
+            .draw_colours = 0x40,
+            .world_position = world.Position.from_map_location(fire.entity.location, 0),
+            .target_world_position = world.Position.from_map_location(
+                fire.entity.location,
+                0,
+            ),
+        }) catch {
+            platform.trace("warning: failed to push sprite. no space left");
+        };
+
+        if (fire.path.length > 0) {
+            const next_location = fire.path.elements[if (fire.path.length > 1) 1 else 0];
             sprite_list.push(.{
-                .texture = gfx.Texture.fire_big,
+                .texture = gfx.Texture.fire_small,
                 .draw_colours = 0x40,
-                .location = fire.entity.location,
-                .target_location = fire.entity.target_location,
+                .world_position = world.Position.from_map_location(next_location, 0),
+                .target_world_position = world.Position.from_map_location(next_location, 0),
             }) catch {
                 platform.trace("warning: failed to push sprite. no space left");
             };
         }
-
-        if (fire.path.length > 0) {
-            const next_location = fire.path.elements[0];
-            if (world.map_get_tile(state.world_vis_map, fire.entity.target_location) > 0) {
-                sprite_list.push(.{
-                    .texture = gfx.Texture.fire_small,
-                    .draw_colours = 0x40,
-                    .location = next_location,
-                    .target_location = next_location,
-                }) catch {
-                    platform.trace("warning: failed to push sprite. no space left");
-                };
-            }
-        }
     }
 
-    gfx.draw_world(state, camera_screen_pos);
+    gfx.draw_world(state, camera_world_pos);
 
-    gfx.sprite_list_draw_shadows(&sprite_list, camera_screen_pos, animation_frame, state.world_vis_map);
+    gfx.sprite_list_draw_shadows(
+        &sprite_list,
+        camera_world_pos,
+        animation_frame,
+        state.world_vis_map,
+    );
 
     if (state.turn_state == .aim) {
-        gfx.draw_tile_markers(state, camera_screen_pos);
+        gfx.draw_tile_markers(state, camera_world_pos);
     }
 
-    gfx.sprite_list_draw(&sprite_list, camera_screen_pos, animation_frame, state.world_vis_map);
+    gfx.sprite_list_draw(
+        &sprite_list,
+        camera_world_pos,
+        animation_frame,
+        state.world_vis_map,
+    );
 
-    gfx.sprite_list_draw_decorations(&sprite_list, camera_screen_pos, animation_frame, state.world_vis_map);
+    gfx.sprite_list_draw_decorations(
+        &sprite_list,
+        camera_world_pos,
+        animation_frame,
+        state.world_vis_map,
+    );
 
     if (state.turn_state == .dead) {
         gfx.draw_transparent_overlay();
         stats_screen(state, newest_input, "YOU DIED", .reload, null);
         menu_option = state.level;
     } else {
-        gfx.draw_hud(state, camera_screen_pos);
+        gfx.draw_hud(state, camera_world_pos);
     }
 }
 
 fn push_enemy_sprites(
     sprite_list: *gfx.SpriteList,
-    state: *State,
     kind: enum { monster, fire_monster, charge_monster },
+    enemies: anytype,
 ) void {
-    for (switch (kind) {
-        .monster => state.monsters[0..],
-        .fire_monster => state.fire_monsters[0..],
-        .charge_monster => state.charge_monsters[0..],
-    }) |*enemy| {
+    for (enemies) |*enemy| {
         if (enemy.entity.health > 0) {
             sprite_list.push(.{
                 .texture = switch (kind) {
@@ -1180,8 +1189,11 @@ fn push_enemy_sprites(
                     .charge_monster => gfx.Texture.charge_monster,
                 },
                 .draw_colours = if (enemy.entity.did_receive_damage) 0x40 else 0x20,
-                .location = enemy.entity.location,
-                .target_location = enemy.entity.target_location,
+                .world_position = world.Position.from_map_location(enemy.entity.location, 0),
+                .target_world_position = world.Position.from_map_location(
+                    enemy.entity.target_location,
+                    0,
+                ),
                 .casts_shadow = true,
                 .decoration_texture = switch (kind) {
                     .charge_monster => switch (enemy.entity.state) {
@@ -1286,6 +1298,6 @@ fn reload_screen(state: anytype, input: anytype) void {
     }
 }
 
-//// Tests //////////////////////////////////////////////////////////
-
-const testing = std.testing;
+test {
+    std.testing.refAllDecls(@This());
+}

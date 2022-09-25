@@ -1,12 +1,23 @@
 const std = @import("std");
 
+const platform_wasm4_pkg = make_pkg("platform", "src/platform_wasm4.zig", &[_]std.build.Pkg{});
+const platform_null_pkg = make_pkg("platform", "src/platform_null.zig", &[_]std.build.Pkg{});
+
+const gfx_wasm4_pkg = make_pkg("gfx", "src/gfx_wasm4.zig", ([_]std.build.Pkg{platform_wasm4_pkg})[0..]);
+
+const sfx_wasm4_pkg = make_pkg("sfx", "src/sfx_wasm4.zig", ([_]std.build.Pkg{platform_wasm4_pkg})[0..]);
+
 pub fn build(b: *std.build.Builder) !void {
     const tests = b.addTest("src/tests.zig");
     tests.setBuildMode(b.standardReleaseOptions());
 
+    tests.addPackage(platform_null_pkg);
+    tests.addPackage(gfx_wasm4_pkg);
+    tests.addPackage(sfx_wasm4_pkg);
+
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&tests.step);
-    
+
     try build_wasm4(b);
 }
 
@@ -20,15 +31,14 @@ fn build_wasm4(b: *std.build.Builder) !void {
     cart.stack_size = 14752;
     cart.export_symbol_names = &[_][]const u8{ "start", "update" };
     cart.install();
-    
-    cart.addPackage(.{
-        .name = "platform",
-        .source = .{ .path = thisDir() ++ "/src/platform_wasm4.zig" },
-    });
-    
+
+    cart.addPackage(platform_wasm4_pkg);
+    cart.addPackage(gfx_wasm4_pkg);
+    cart.addPackage(sfx_wasm4_pkg);
+
     cart.addPackage(.{
         .name = "data",
-        .source = .{ .path = thisDir() ++ "/src/data.zig" },
+        .source = .{ .path = this_dir() ++ "/src/data.zig" },
     });
 
     const prefix = b.getInstallPath(.lib, "");
@@ -50,6 +60,18 @@ fn build_wasm4(b: *std.build.Builder) !void {
     release_build.dependOn(&cart_opt.step);
 }
 
-inline fn thisDir() []const u8 {
+inline fn make_pkg(
+    name: []const u8,
+    src_path: []const u8,
+    dependencies: anytype,
+) std.build.Pkg {
+    return .{
+        .name = name,
+        .source = .{ .path = this_dir() ++ "/" ++ src_path },
+        .dependencies = dependencies,
+    };
+}
+
+inline fn this_dir() []const u8 {
     return comptime std.fs.path.dirname(@src().file) orelse ".";
 }
