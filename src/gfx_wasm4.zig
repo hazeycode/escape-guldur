@@ -10,10 +10,12 @@ const StaticList = util.StaticList;
 const world = @import("world.zig");
 
 pub const max_sprites = 64;
-pub const move_animation_frames = 3;
+pub const move_animation_length = 3;
 pub const camera_height = 0;
 
 pub var frame_counter: usize = 0;
+pub var move_animation_frame: usize = 0;
+pub var flip_player_sprite = false;
 
 pub const ScreenPosition = struct {
     x: i32,
@@ -63,7 +65,7 @@ pub fn init() void {
     });
 }
 
-pub const Sprite = struct {
+const Sprite = struct {
     texture: Texture,
     draw_colours: u16,
     world_position: world.Position,
@@ -73,9 +75,9 @@ pub const Sprite = struct {
     decoration_texture: ?Texture = null,
 };
 
-pub const SpriteList = StaticList(Sprite, max_sprites);
+const SpriteList = StaticList(Sprite, max_sprites);
 
-pub fn sprite_list_draw(
+fn sprite_list_draw(
     sprite_list: *SpriteList,
     camera_position: world.Position,
     anim_frame: usize,
@@ -85,7 +87,7 @@ pub fn sprite_list_draw(
         const actual_world_position = sprite.world_position.lerp_to(
             sprite.target_world_position,
             anim_frame,
-            move_animation_frames,
+            move_animation_length,
         );
         if (world.map_get_tile(visibilty_map, actual_world_position.to_map_location()) > 0) {
             const screen_pos = ScreenPosition.from_world_position(
@@ -106,7 +108,7 @@ pub fn sprite_list_draw(
     }
 }
 
-pub fn sprite_list_draw_shadows(
+fn sprite_list_draw_shadows(
     sprite_list: *SpriteList,
     camera_position: world.Position,
     anim_frame: usize,
@@ -117,7 +119,7 @@ pub fn sprite_list_draw_shadows(
             const actual_world_position = sprite.world_position.lerp_to(
                 sprite.target_world_position,
                 anim_frame,
-                move_animation_frames,
+                move_animation_length,
             );
             if (world.map_get_tile(visibilty_map, actual_world_position.to_map_location()) > 0) {
                 const screen_pos = ScreenPosition.from_world_position(
@@ -136,7 +138,7 @@ pub fn sprite_list_draw_shadows(
     }
 }
 
-pub fn sprite_list_draw_decorations(
+fn sprite_list_draw_decorations(
     sprite_list: *SpriteList,
     camera_position: world.Position,
     anim_frame: usize,
@@ -147,7 +149,7 @@ pub fn sprite_list_draw_decorations(
             const actual_world_position = sprite.world_position.lerp_to(
                 sprite.target_world_position,
                 anim_frame,
-                move_animation_frames,
+                move_animation_length,
             );
             if (world.map_get_tile(visibilty_map, actual_world_position.to_map_location()) > 0) {
                 const screen_pos = ScreenPosition.from_world_position(
@@ -169,56 +171,192 @@ pub fn sprite_list_draw_decorations(
     }
 }
 
-pub fn draw_world(state: anytype, camera_position: world.Position) void {
-    var location: world.MapLocation = .{ .x = 0, .y = 0 };
-    while (location.x < world.map_columns) : (location.x += 1) {
-        defer location.y = 0;
-        while (location.y < world.map_rows) : (location.y += 1) {
-            switch (world.map_get_tile_kind(state.world_map, location)) {
-                .wall, .secret_path => {},
-                .door => {
-                    platform.set_draw_colours(0x30);
-                    const screen_pos = ScreenPosition.from_world_position(
-                        world.Position.from_map_location(location, 0).sub(.{
-                            .x = world.map_world_scale/2,
-                            .y = world.map_world_scale/2,
-                            .z = 0,
-                        }),
-                        camera_position,
-                    );
-                    platform.blit(
-                        Texture.door.bytes,
-                        screen_pos.x + (world.map_world_scale - Texture.door.width) / 2,
-                        screen_pos.y + (world.map_world_scale - Texture.door.height) / 2,
-                        Texture.door.width,
-                        Texture.door.height,
-                        1,
-                        false,
-                    );
+fn sprite_list_push_enemy_sprites(
+    sprite_list: *SpriteList,
+    kind: enum { monster, fire_monster, charge_monster },
+    enemies: anytype,
+) void {
+    for (enemies) |*enemy| {
+        if (enemy.entity.health > 0) {
+            sprite_list.push(.{
+                .texture = switch (kind) {
+                    .monster => Texture.monster,
+                    .fire_monster => Texture.fire_monster,
+                    .charge_monster => Texture.charge_monster,
                 },
-                else => {
-                    if (world.map_get_tile(state.world_vis_map, location) > 0) {
-                        // TODO(hazeycode): optimise floor drawing by deferring and rendering contiguous blocks
-                        platform.set_draw_colours(0x33);
+                .draw_colours = if (enemy.entity.did_receive_damage) 0x40 else 0x20,
+                .world_position = world.Position.from_map_location(enemy.entity.location, 0),
+                .target_world_position = world.Position.from_map_location(
+                    enemy.entity.target_location,
+                    0,
+                ),
+                .casts_shadow = true,
+                .decoration_texture = switch (kind) {
+                    .charge_monster => switch (enemy.entity.state) {
+                        .charge => Texture.alert_marker,
+                        else => null,
+                    },
+                    else => null,
+                },
+            }) catch {
+                platform.trace("warning: failed to push sprite. no space left");
+            };
+        }
+    }
+}
+
+pub fn draw_game(state: anytype, camera_world_pos: world.Position) void {
+    var sprite_list = SpriteList{};
+
+    sprite_list_push_enemy_sprites(&sprite_list, .monster, state.monsters);
+    sprite_list_push_enemy_sprites(&sprite_list, .fire_monster, state.fire_monsters);
+    sprite_list_push_enemy_sprites(&sprite_list, .charge_monster, state.charge_monsters);
+
+    // push pickup sprites
+    for (state.pickups) |*pickup| {
+        if (pickup.entity.health > 0) {
+            sprite_list.push(.{
+                .texture = switch (pickup.kind) {
+                    .health => Texture.heart,
+                    .sword => Texture.sword,
+                    .small_axe => Texture.small_axe,
+                },
+                .draw_colours = 0x40,
+                .world_position = world.Position.from_map_location(pickup.entity.location, 0),
+                .target_world_position = world.Position.from_map_location(
+                    pickup.entity.target_location,
+                    0,
+                ),
+                .casts_shadow = true,
+            }) catch {
+                platform.trace("warning: failed to push sprite. no space left");
+            };
+        }
+    }
+
+    { // push player sprite
+        sprite_list.push(.{
+            .texture = Texture.player,
+            .draw_colours = if (state.player.entity.did_receive_damage) 0x40 else 0x20,
+            .world_position = world.Position.from_map_location(state.player.entity.location, 0),
+            .target_world_position = world.Position.from_map_location(
+                state.player.entity.target_location,
+                0,
+            ),
+            .flip_x = flip_player_sprite,
+            .casts_shadow = true,
+        }) catch {
+            platform.trace("warning: failed to push sprite. no space left");
+        };
+    }
+
+    // push fire sprites
+    for (state.fire) |*fire| {
+        if (fire.entity.health <= 0) {
+            continue;
+        }
+
+        sprite_list.push(.{
+            .texture = Texture.fire_big,
+            .draw_colours = 0x40,
+            .world_position = world.Position.from_map_location(fire.entity.location, 0),
+            .target_world_position = world.Position.from_map_location(
+                fire.entity.location,
+                0,
+            ),
+        }) catch {
+            platform.trace("warning: failed to push sprite. no space left");
+        };
+
+        if (fire.path.length > 0) {
+            const next_location = fire.path.elements[if (fire.path.length > 1) 1 else 0];
+            sprite_list.push(.{
+                .texture = Texture.fire_small,
+                .draw_colours = 0x40,
+                .world_position = world.Position.from_map_location(next_location, 0),
+                .target_world_position = world.Position.from_map_location(next_location, 0),
+            }) catch {
+                platform.trace("warning: failed to push sprite. no space left");
+            };
+        }
+    }
+
+    { // draw world
+        var location: world.MapLocation = .{ .x = 0, .y = 0 };
+        while (location.x < world.map_columns) : (location.x += 1) {
+            defer location.y = 0;
+            while (location.y < world.map_rows) : (location.y += 1) {
+                switch (world.map_get_tile_kind(state.world_map, location)) {
+                    .wall, .secret_path => {},
+                    .door => {
+                        platform.set_draw_colours(0x30);
                         const screen_pos = ScreenPosition.from_world_position(
                             world.Position.from_map_location(location, 0).sub(.{
-                                .x = world.map_world_scale/2,
-                                .y = world.map_world_scale/2,
+                                .x = world.map_world_scale / 2,
+                                .y = world.map_world_scale / 2,
                                 .z = 0,
                             }),
-                            camera_position,
+                            camera_world_pos,
                         );
-                        platform.rect(
-                            screen_pos.x,
-                            screen_pos.y,
-                            world.map_world_scale,
-                            world.map_world_scale,
+                        platform.blit(
+                            Texture.door.bytes,
+                            screen_pos.x + (world.map_world_scale - Texture.door.width) / 2,
+                            screen_pos.y + (world.map_world_scale - Texture.door.height) / 2,
+                            Texture.door.width,
+                            Texture.door.height,
+                            1,
+                            false,
                         );
-                    }
-                },
+                    },
+                    else => {
+                        if (world.map_get_tile(state.world_vis_map, location) > 0) {
+                            // TODO(hazeycode): optimise floor drawing by deferring and rendering contiguous blocks
+                            platform.set_draw_colours(0x33);
+                            const screen_pos = ScreenPosition.from_world_position(
+                                world.Position.from_map_location(location, 0).sub(.{
+                                    .x = world.map_world_scale / 2,
+                                    .y = world.map_world_scale / 2,
+                                    .z = 0,
+                                }),
+                                camera_world_pos,
+                            );
+                            platform.rect(
+                                screen_pos.x,
+                                screen_pos.y,
+                                world.map_world_scale,
+                                world.map_world_scale,
+                            );
+                        }
+                    },
+                }
             }
         }
     }
+
+    sprite_list_draw_shadows(
+        &sprite_list,
+        camera_world_pos,
+        move_animation_frame,
+        state.world_vis_map,
+    );
+
+    if (state.turn_state == .aim) {
+        draw_tile_markers(state, camera_world_pos);
+    }
+
+    sprite_list_draw(
+        &sprite_list,
+        camera_world_pos,
+        move_animation_frame,
+        state.world_vis_map,
+    );
+
+    sprite_list_draw_decorations(
+        &sprite_list,
+        camera_world_pos,
+        move_animation_frame,
+        state.world_vis_map,
+    );
 }
 
 pub fn draw_tile_markers(state: anytype, camera_position: world.Position) void {
@@ -232,14 +370,14 @@ pub fn draw_tile_markers(state: anytype, camera_position: world.Position) void {
             world.Position.from_map_location(target, 0),
             camera_position,
         );
-        
+
         platform.set_draw_colours(0x4444);
-        
+
         const width = world.map_world_scale;
         const height = world.map_world_scale + 3;
         const half_width = width / 2;
         const half_height = height / 4;
-        
+
         const x0 = screen_pos.x;
         const y0 = screen_pos.y - half_height;
         const x1 = screen_pos.x + half_width;
@@ -248,7 +386,7 @@ pub fn draw_tile_markers(state: anytype, camera_position: world.Position) void {
         const y2 = screen_pos.y + half_height;
         const x3 = screen_pos.x - half_width;
         const y3 = screen_pos.y;
-        
+
         platform.line(x0, y0, x1, y1);
         platform.line(x1, y1, x2, y2);
         platform.line(x2, y2, x3, y3);
@@ -274,12 +412,12 @@ pub fn draw_hud(state: anytype, camera_position: world.Position) void {
                 world.Position.from_map_location(active_target, 0),
                 camera_position,
             );
-            
+
             const width = world.map_world_scale;
             const height = world.map_world_scale + 3;
             const half_width = width / 2;
             const half_height = height / 2;
-            
+
             const x0 = screen_pos.x - half_width;
             const y0 = screen_pos.y - half_height - 4;
             const x1 = screen_pos.x + half_width;

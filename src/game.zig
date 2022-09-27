@@ -22,7 +22,6 @@ const starting_player_health = 5;
 
 var screen: Screen = .title;
 var menu_option: u8 = 0;
-var flip_player_sprite = false;
 var anim_start_frame: usize = 0;
 var camera_location = world.MapLocation{ .x = 0, .y = 0 };
 var camera_world_pos = world.Position{ .x = 0, .y = 0, .z = 0 };
@@ -774,13 +773,12 @@ fn update_fire(state: *State, fire: *Enemy) void {
     if (fire.path.pop()) |next_location| {
         fire.entity.target_location = next_location;
         fire.entity.state = .walk;
-        
+
         if (fire.entity.target_location.eql(state.player.entity.location)) {
             platform.trace("fire hit player!");
             state.player.entity.pending_damage += 1;
         }
-    }
-    else {
+    } else {
         fire.entity.state = .idle;
         fire.entity.health = 0;
         platform.trace("fire extinguished");
@@ -902,12 +900,12 @@ fn game_screen(state: anytype, newest_input: anytype) void {
                 } else if (input.up > 0) {
                     try_move(state, state.player.entity.location.walk(.north, 1));
                 } else if (input.right > 0) {
-                    flip_player_sprite = false;
+                    gfx.flip_player_sprite = false;
                     try_move(state, state.player.entity.location.walk(.east, 1));
                 } else if (input.down > 0) {
                     try_move(state, state.player.entity.location.walk(.south, 1));
                 } else if (input.left > 0) {
-                    flip_player_sprite = true;
+                    gfx.flip_player_sprite = true;
                     try_move(state, state.player.entity.location.walk(.west, 1));
                 }
             }
@@ -929,9 +927,9 @@ fn game_screen(state: anytype, newest_input: anytype) void {
                                 state.player.remove_item(.small_axe);
                                 spawn_pickup(state, target_location, .small_axe);
                                 if (target_location.x < state.player.entity.location.x) {
-                                    flip_player_sprite = true;
+                                    gfx.flip_player_sprite = true;
                                 } else if (target_location.x > state.player.entity.location.x) {
-                                    flip_player_sprite = false;
+                                    gfx.flip_player_sprite = false;
                                 }
                                 commit_move(state);
                             },
@@ -959,8 +957,8 @@ fn game_screen(state: anytype, newest_input: anytype) void {
             }
         },
         .commit => {
-            const animation_frame = gfx.frame_counter - anim_start_frame;
-            if (animation_frame > gfx.move_animation_frames) {
+            gfx.move_animation_frame = gfx.frame_counter - anim_start_frame;
+            if (gfx.move_animation_frame > gfx.move_animation_length) {
                 switch (state.player.entity.state) {
                     .walk => {
                         state.player.entity.location = state.player.entity.target_location;
@@ -969,7 +967,7 @@ fn game_screen(state: anytype, newest_input: anytype) void {
                         state.player.entity.target_location = state.player.entity.location;
                     },
                 }
-                          
+
                 entities_apply_pending_damage(&state.monsters);
                 entities_apply_pending_damage(&state.fire_monsters);
                 entities_apply_pending_damage(&state.charge_monsters);
@@ -982,8 +980,8 @@ fn game_screen(state: anytype, newest_input: anytype) void {
             }
         },
         .response => {
-            const animation_frame = gfx.frame_counter - anim_start_frame;
-            if (animation_frame > gfx.move_animation_frames) {
+            gfx.move_animation_frame = gfx.frame_counter - anim_start_frame;
+            if (gfx.move_animation_frame > gfx.move_animation_length) {
                 entities_complete_move(&state.monsters);
                 entities_complete_move(&state.fire_monsters);
                 entities_complete_move(&state.charge_monsters);
@@ -1012,7 +1010,7 @@ fn game_screen(state: anytype, newest_input: anytype) void {
         .dead => {},
     }
 
-    const animation_frame = switch (state.turn_state) {
+    gfx.move_animation_frame = switch (state.turn_state) {
         .aim, .commit, .response => gfx.frame_counter - anim_start_frame,
         else => 0,
     };
@@ -1020,7 +1018,7 @@ fn game_screen(state: anytype, newest_input: anytype) void {
     { // update camera
         if (state.turn_state == .aim and state.action_targets.length > 0) {
             // move to aim target
-            if (animation_frame <= gfx.move_animation_frames) {
+            if (gfx.move_animation_frame <= gfx.move_animation_length) {
                 // TODO: Move to gfx_wasm4.zig
                 const target_location = state.action_targets.get(state.action_target) catch {
                     platform.trace("error: failed to get action target");
@@ -1028,8 +1026,8 @@ fn game_screen(state: anytype, newest_input: anytype) void {
                 };
                 camera_world_pos = world.Position.from_map_location(camera_location, 0).lerp_to(
                     world.Position.from_map_location(target_location, 0),
-                    animation_frame,
-                    gfx.move_animation_frames,
+                    gfx.move_animation_frame,
+                    gfx.move_animation_length,
                 );
             } else {
                 // TODO: Move to gfx_wasm4.zig
@@ -1045,8 +1043,8 @@ fn game_screen(state: anytype, newest_input: anytype) void {
             camera_location = state.player.entity.location;
             camera_world_pos = world.Position.from_map_location(camera_location, 0).lerp_to(
                 world.Position.from_map_location(state.player.entity.target_location, 0),
-                animation_frame,
-                gfx.move_animation_frames,
+                gfx.move_animation_frame,
+                gfx.move_animation_length,
             );
         }
     }
@@ -1064,148 +1062,14 @@ fn game_screen(state: anytype, newest_input: anytype) void {
         }
     }
 
-    var sprite_list = gfx.SpriteList{};
-
-    push_enemy_sprites(&sprite_list, .monster, state.monsters);
-    push_enemy_sprites(&sprite_list, .fire_monster, state.fire_monsters);
-    push_enemy_sprites(&sprite_list, .charge_monster, state.charge_monsters);
-
-    // push pickup sprites
-    for (state.pickups) |*pickup| {
-        if (pickup.entity.health > 0) {
-            sprite_list.push(.{
-                .texture = switch (pickup.kind) {
-                    .health => gfx.Texture.heart,
-                    .sword => gfx.Texture.sword,
-                    .small_axe => gfx.Texture.small_axe,
-                },
-                .draw_colours = 0x40,
-                .world_position = world.Position.from_map_location(pickup.entity.location, 0),
-                .target_world_position = world.Position.from_map_location(
-                    pickup.entity.target_location,
-                    0,
-                ),
-                .casts_shadow = true,
-            }) catch {
-                platform.trace("warning: failed to push sprite. no space left");
-            };
-        }
-    }
-
-    { // push player sprite
-        sprite_list.push(.{
-            .texture = gfx.Texture.player,
-            .draw_colours = if (state.player.entity.did_receive_damage) 0x40 else 0x20,
-            .world_position = world.Position.from_map_location(state.player.entity.location, 0),
-            .target_world_position = world.Position.from_map_location(
-                state.player.entity.target_location,
-                0,
-            ),
-            .flip_x = flip_player_sprite,
-            .casts_shadow = true,
-        }) catch {
-            platform.trace("warning: failed to push sprite. no space left");
-        };
-    }
-
-    // push fire sprites
-    for (state.fire) |*fire| {
-        if (fire.entity.health <= 0) {
-            continue;
-        }
-
-        sprite_list.push(.{
-            .texture = gfx.Texture.fire_big,
-            .draw_colours = 0x40,
-            .world_position = world.Position.from_map_location(fire.entity.location, 0),
-            .target_world_position = world.Position.from_map_location(
-                fire.entity.location,
-                0,
-            ),
-        }) catch {
-            platform.trace("warning: failed to push sprite. no space left");
-        };
-
-        if (fire.path.length > 0) {
-            const next_location = fire.path.elements[if (fire.path.length > 1) 1 else 0];
-            sprite_list.push(.{
-                .texture = gfx.Texture.fire_small,
-                .draw_colours = 0x40,
-                .world_position = world.Position.from_map_location(next_location, 0),
-                .target_world_position = world.Position.from_map_location(next_location, 0),
-            }) catch {
-                platform.trace("warning: failed to push sprite. no space left");
-            };
-        }
-    }
-
-    gfx.draw_world(state, camera_world_pos);
-
-    gfx.sprite_list_draw_shadows(
-        &sprite_list,
-        camera_world_pos,
-        animation_frame,
-        state.world_vis_map,
-    );
-
-    if (state.turn_state == .aim) {
-        gfx.draw_tile_markers(state, camera_world_pos);
-    }
-
-    gfx.sprite_list_draw(
-        &sprite_list,
-        camera_world_pos,
-        animation_frame,
-        state.world_vis_map,
-    );
-
-    gfx.sprite_list_draw_decorations(
-        &sprite_list,
-        camera_world_pos,
-        animation_frame,
-        state.world_vis_map,
-    );
-
+    gfx.draw_game(state, camera_world_pos);
+    
     if (state.turn_state == .dead) {
         gfx.draw_transparent_overlay();
         stats_screen(state, newest_input, "YOU DIED", .reload, null);
         menu_option = state.level;
     } else {
         gfx.draw_hud(state, camera_world_pos);
-    }
-}
-
-fn push_enemy_sprites(
-    sprite_list: *gfx.SpriteList,
-    kind: enum { monster, fire_monster, charge_monster },
-    enemies: anytype,
-) void {
-    for (enemies) |*enemy| {
-        if (enemy.entity.health > 0) {
-            sprite_list.push(.{
-                .texture = switch (kind) {
-                    .monster => gfx.Texture.monster,
-                    .fire_monster => gfx.Texture.fire_monster,
-                    .charge_monster => gfx.Texture.charge_monster,
-                },
-                .draw_colours = if (enemy.entity.did_receive_damage) 0x40 else 0x20,
-                .world_position = world.Position.from_map_location(enemy.entity.location, 0),
-                .target_world_position = world.Position.from_map_location(
-                    enemy.entity.target_location,
-                    0,
-                ),
-                .casts_shadow = true,
-                .decoration_texture = switch (kind) {
-                    .charge_monster => switch (enemy.entity.state) {
-                        .charge => gfx.Texture.alert_marker,
-                        else => null,
-                    },
-                    else => null,
-                },
-            }) catch {
-                platform.trace("warning: failed to push sprite. no space left");
-            };
-        }
     }
 }
 

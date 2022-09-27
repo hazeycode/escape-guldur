@@ -15,7 +15,7 @@ pub const Position = struct {
     x: i32,
     y: i32,
     z: i32,
-    
+
     pub inline fn add(self: @This(), other: @This()) @This() {
         return .{
             .x = self.x + other.x,
@@ -23,7 +23,7 @@ pub const Position = struct {
             .z = self.z + other.z,
         };
     }
-    
+
     pub inline fn sub(self: @This(), other: @This()) @This() {
         return .{
             .x = self.x - other.x,
