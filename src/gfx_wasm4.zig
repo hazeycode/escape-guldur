@@ -15,7 +15,6 @@ pub const camera_height = 0;
 
 pub var frame_counter: usize = 0;
 pub var move_anim_start_frame: usize = 0;
-pub var camera_location = world.MapLocation{ .x = 0, .y = 0 };
 pub var camera_world_pos = world.Position{ .x = 0, .y = 0, .z = 0 };
 pub var flip_player_sprite = false;
 
@@ -210,13 +209,13 @@ pub fn draw_game(state: anytype) void {
                     platform.trace("error: failed to get action target");
                     unreachable;
                 };
-                camera_world_pos = world.Position.from_map_location(camera_location, 0).lerp_to(
+                camera_world_pos = camera_world_pos.lerp_to(
                     world.Position.from_map_location(target_location, 0),
                     move_animation_frame,
                     move_animation_length,
                 );
             } else {
-                camera_location = state.action_targets.get(state.action_target) catch {
+                const camera_location = state.action_targets.get(state.action_target) catch {
                     platform.trace("error: failed to get action target");
                     unreachable;
                 };
@@ -224,8 +223,7 @@ pub fn draw_game(state: anytype) void {
             }
         } else {
             // follow player
-            camera_location = state.player.entity.location;
-            camera_world_pos = world.Position.from_map_location(camera_location, 0).lerp_to(
+            camera_world_pos = world.Position.from_map_location(state.player.entity.location, 0).lerp_to(
                 world.Position.from_map_location(state.player.entity.target_location, 0),
                 move_animation_frame,
                 move_animation_length,
