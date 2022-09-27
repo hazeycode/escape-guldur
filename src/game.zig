@@ -655,7 +655,6 @@ fn update_charge_monster(state: *State, monster: *Enemy) void {
                         switch (world.map_get_tile_kind(self.game_state.world_map, location)) {
                             .wall => {
                                 self.hit_impassable = true;
-                                sfx.bash_wall();
                                 return false;
                             },
                             .breakable_wall => {

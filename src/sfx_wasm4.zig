@@ -18,11 +18,6 @@ pub fn receive_damage() void {
     w4.tone(300 | (100 << 16), 2 | (4 << 8), 100, w4.TONE_TRIANGLE);
 }
 
-pub fn bash_wall() void {
-    w4.tone(110, (4 << 8) | (4 << 0), 50, w4.TONE_NOISE);
-    w4.tone(90, (4 << 8) | (4 << 0), 80, w4.TONE_PULSE1);
-}
-
 pub fn destroy_wall() void {
     w4.tone(70, (4 << 8) | (8 << 0), 50, w4.TONE_PULSE2 | w4.TONE_MODE2);
     w4.tone(200, (4 << 8) | (8 << 0), 80, w4.TONE_NOISE);
