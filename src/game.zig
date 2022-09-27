@@ -253,7 +253,7 @@ fn spawn_fire(state: *State, path: *world.Path) void {
             if (fire.entity.health <= 0) {
                 fire.entity.health = 1;
                 fire.entity.state = .walk;
-                fire.entity.location = location;
+                fire.entity.set_location(location);
                 if (path.pop()) |next_location| {
                     fire.entity.target_location = next_location;
                     fire.path.push(next_location) catch {
