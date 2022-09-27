@@ -227,6 +227,7 @@ fn spawn_enemy(pool: anytype, location: world.MapLocation, health: u4) void {
             enemy.entity.set_location(location);
             enemy.entity.health = health;
             enemy.entity.state = .idle;
+            enemy.path.length = 0;
             platform.trace("spawned enemy");
             return;
         }
