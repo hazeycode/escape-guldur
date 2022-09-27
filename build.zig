@@ -5,7 +5,7 @@ const platform_null_pkg = make_pkg("platform", "src/platform_null.zig", &[_]std.
 
 const gfx_wasm4_pkg = make_pkg("gfx", "src/gfx_wasm4.zig", ([_]std.build.Pkg{platform_wasm4_pkg})[0..]);
 
-const sfx_wasm4_pkg = make_pkg("sfx", "src/sfx_wasm4.zig", ([_]std.build.Pkg{platform_wasm4_pkg})[0..]);
+const sfx_wasm4_pkg = make_pkg("sfx", "src/sfx.zig", ([_]std.build.Pkg{platform_wasm4_pkg})[0..]);
 
 pub fn build(b: *std.build.Builder) !void {
     const tests = b.addTest("src/tests.zig");

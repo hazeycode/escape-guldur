@@ -68,3 +68,39 @@ pub fn blit(
     if (flip_x) flags |= w4.BLIT_FLIP_X;
     w4.blit(@ptrCast([*]const u8, texture_bytes), x, y, width, height, flags);
 }
+
+pub const AudioPlayback = struct {
+
+    pub fn play_tone(args: struct {
+        channel: enum { pulse1, pulse2, triangle, noise },
+        duty_cycle: enum { eighth, quarter, half, three_quarter } = .eighth,
+        freq1: u32,
+        freq2: u32,
+        attack: u32 = 0,
+        decay: u32 = 0,
+        sustain: u32 = 0,
+        release: u32 = 0,
+        volume_sustain: u32 = 100,
+        volume_peak: u32 = 100,
+    }) void {
+        var flags: u32 = switch (args.channel) {
+            .pulse1 => w4.TONE_PULSE1,
+            .pulse2 => w4.TONE_PULSE2,
+            .triangle => w4.TONE_TRIANGLE,
+            .noise => w4.TONE_NOISE,
+        };
+        flags |= switch (args.duty_cycle) {
+            .eighth => w4.TONE_MODE1,
+            .quarter => w4.TONE_MODE2,
+            .half => w4.TONE_MODE3,
+            .three_quarter => w4.TONE_MODE4,
+        };
+        w4.tone(
+            args.freq1 | (args.freq2 << 16),
+            (args.attack << 24) | (args.decay << 16) | (args.sustain) | (args.release << 8),
+            args.volume_sustain | (args.volume_peak << 16),
+            flags,
+        );
+    }
+};
+
