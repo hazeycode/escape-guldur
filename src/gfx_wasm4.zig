@@ -14,7 +14,9 @@ pub const move_animation_length = 3;
 pub const camera_height = 0;
 
 pub var frame_counter: usize = 0;
-pub var move_animation_frame: usize = 0;
+pub var move_anim_start_frame: usize = 0;
+pub var camera_location = world.MapLocation{ .x = 0, .y = 0 };
+pub var camera_world_pos = world.Position{ .x = 0, .y = 0, .z = 0 };
 pub var flip_player_sprite = false;
 
 pub const ScreenPosition = struct {
@@ -77,12 +79,7 @@ const Sprite = struct {
 
 const SpriteList = StaticList(Sprite, max_sprites);
 
-fn sprite_list_draw(
-    sprite_list: *SpriteList,
-    camera_position: world.Position,
-    anim_frame: usize,
-    visibilty_map: anytype,
-) void {
+fn sprite_list_draw(sprite_list: *SpriteList, visibilty_map: anytype, anim_frame: u32) void {
     for (sprite_list.all()) |sprite| {
         const actual_world_position = sprite.world_position.lerp_to(
             sprite.target_world_position,
@@ -92,7 +89,7 @@ fn sprite_list_draw(
         if (world.map_get_tile(visibilty_map, actual_world_position.to_map_location()) > 0) {
             const screen_pos = ScreenPosition.from_world_position(
                 actual_world_position,
-                camera_position,
+                camera_world_pos,
             );
             platform.set_draw_colours(sprite.draw_colours);
             platform.blit(
@@ -108,12 +105,7 @@ fn sprite_list_draw(
     }
 }
 
-fn sprite_list_draw_shadows(
-    sprite_list: *SpriteList,
-    camera_position: world.Position,
-    anim_frame: usize,
-    visibilty_map: anytype,
-) void {
+fn sprite_list_draw_shadows(sprite_list: *SpriteList, visibilty_map: anytype, anim_frame: u32) void {
     for (sprite_list.all()) |sprite| {
         if (sprite.casts_shadow) {
             const actual_world_position = sprite.world_position.lerp_to(
@@ -124,7 +116,7 @@ fn sprite_list_draw_shadows(
             if (world.map_get_tile(visibilty_map, actual_world_position.to_map_location()) > 0) {
                 const screen_pos = ScreenPosition.from_world_position(
                     actual_world_position,
-                    camera_position,
+                    camera_world_pos,
                 );
                 platform.set_draw_colours(0x11);
                 platform.oval(
@@ -140,9 +132,8 @@ fn sprite_list_draw_shadows(
 
 fn sprite_list_draw_decorations(
     sprite_list: *SpriteList,
-    camera_position: world.Position,
-    anim_frame: usize,
     visibilty_map: anytype,
+    anim_frame: u32,
 ) void {
     for (sprite_list.all()) |sprite| {
         if (sprite.decoration_texture) |decoration_texture| {
@@ -154,7 +145,7 @@ fn sprite_list_draw_decorations(
             if (world.map_get_tile(visibilty_map, actual_world_position.to_map_location()) > 0) {
                 const screen_pos = ScreenPosition.from_world_position(
                     actual_world_position,
-                    camera_position,
+                    camera_world_pos,
                 );
                 platform.set_draw_colours(0x40);
                 platform.blit(
@@ -205,7 +196,43 @@ fn sprite_list_push_enemy_sprites(
     }
 }
 
-pub fn draw_game(state: anytype, camera_world_pos: world.Position) void {
+pub fn draw_game(state: anytype) void {
+    const move_animation_frame = switch (state.turn_state) {
+        .aim, .commit, .response => frame_counter - move_anim_start_frame,
+        else => 0,
+    };
+
+    { // update camera
+        if (state.turn_state == .aim and state.action_targets.length > 0) {
+            // move to aim target
+            if (move_animation_frame <= move_animation_length) {
+                const target_location = state.action_targets.get(state.action_target) catch {
+                    platform.trace("error: failed to get action target");
+                    unreachable;
+                };
+                camera_world_pos = world.Position.from_map_location(camera_location, 0).lerp_to(
+                    world.Position.from_map_location(target_location, 0),
+                    move_animation_frame,
+                    move_animation_length,
+                );
+            } else {
+                camera_location = state.action_targets.get(state.action_target) catch {
+                    platform.trace("error: failed to get action target");
+                    unreachable;
+                };
+                camera_world_pos = world.Position.from_map_location(camera_location, 0);
+            }
+        } else {
+            // follow player
+            camera_location = state.player.entity.location;
+            camera_world_pos = world.Position.from_map_location(camera_location, 0).lerp_to(
+                world.Position.from_map_location(state.player.entity.target_location, 0),
+                move_animation_frame,
+                move_animation_length,
+            );
+        }
+    }
+
     var sprite_list = SpriteList{};
 
     sprite_list_push_enemy_sprites(&sprite_list, .monster, state.monsters);
@@ -333,33 +360,18 @@ pub fn draw_game(state: anytype, camera_world_pos: world.Position) void {
         }
     }
 
-    sprite_list_draw_shadows(
-        &sprite_list,
-        camera_world_pos,
-        move_animation_frame,
-        state.world_vis_map,
-    );
+    sprite_list_draw_shadows(&sprite_list, state.world_vis_map, move_animation_frame);
 
     if (state.turn_state == .aim) {
-        draw_tile_markers(state, camera_world_pos);
+        draw_tile_markers(state);
     }
 
-    sprite_list_draw(
-        &sprite_list,
-        camera_world_pos,
-        move_animation_frame,
-        state.world_vis_map,
-    );
+    sprite_list_draw(&sprite_list, state.world_vis_map, move_animation_frame);
 
-    sprite_list_draw_decorations(
-        &sprite_list,
-        camera_world_pos,
-        move_animation_frame,
-        state.world_vis_map,
-    );
+    sprite_list_draw_decorations(&sprite_list, state.world_vis_map, move_animation_frame);
 }
 
-pub fn draw_tile_markers(state: anytype, camera_position: world.Position) void {
+pub fn draw_tile_markers(state: anytype) void {
     var i: usize = 0;
     while (i < state.action_targets.length) : (i += 1) {
         const target = state.action_targets.get(i) catch {
@@ -368,7 +380,7 @@ pub fn draw_tile_markers(state: anytype, camera_position: world.Position) void {
         };
         const screen_pos = ScreenPosition.from_world_position(
             world.Position.from_map_location(target, 0),
-            camera_position,
+            camera_world_pos,
         );
 
         platform.set_draw_colours(0x4444);
@@ -394,7 +406,7 @@ pub fn draw_tile_markers(state: anytype, camera_position: world.Position) void {
     }
 }
 
-pub fn draw_hud(state: anytype, camera_position: world.Position) void {
+pub fn draw_hud(state: anytype) void {
     if (state.turn_state == .aim) {
         platform.set_draw_colours(0x04);
 
@@ -410,7 +422,7 @@ pub fn draw_hud(state: anytype, camera_position: world.Position) void {
 
             const screen_pos = ScreenPosition.from_world_position(
                 world.Position.from_map_location(active_target, 0),
-                camera_position,
+                camera_world_pos,
             );
 
             const width = world.map_world_scale;

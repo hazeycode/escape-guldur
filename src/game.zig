@@ -22,9 +22,6 @@ const starting_player_health = 5;
 
 var screen: Screen = .title;
 var menu_option: u8 = 0;
-var anim_start_frame: usize = 0;
-var camera_location = world.MapLocation{ .x = 0, .y = 0 };
-var camera_world_pos = world.Position{ .x = 0, .y = 0, .z = 0 };
 var player_level_starting_health: [6]i8 = .{ starting_player_health, 0, 0, 0, 0, 0 };
 var player_level_starting_items: [6]u8 = .{ 0b1, 0, 0, 0, 0, 0 };
 var player_level_starting_active_item: [6]Player.Item = .{.fists} ** 6;
@@ -453,7 +450,7 @@ fn test_can_ranged_attack(state: *State, location: world.MapLocation) bool {
 fn commit_move(state: *State) void {
     platform.trace("commit move");
 
-    anim_start_frame = gfx.frame_counter;
+    gfx.move_anim_start_frame = gfx.frame_counter;
     state.turn_state = .commit;
 }
 
@@ -894,7 +891,7 @@ fn game_screen(state: anytype, newest_input: anytype) void {
                     };
                     state.action_target = 0;
                     state.turn_state = .aim;
-                    anim_start_frame = gfx.frame_counter;
+                    gfx.move_anim_start_frame = gfx.frame_counter;
                 } else if (input.action_2 > 0) {
                     try_cycle_item(state);
                 } else if (input.up > 0) {
@@ -944,21 +941,20 @@ fn game_screen(state: anytype, newest_input: anytype) void {
                             u8,
                             if (state.action_target == state.action_targets.length - 1) 0 else state.action_target + 1,
                         );
-                        anim_start_frame = gfx.frame_counter;
+                        gfx.move_anim_start_frame = gfx.frame_counter;
                     } else if (input.down > 0 or input.left > 0) {
                         sfx.walk();
                         state.action_target = @intCast(
                             u8,
                             if (state.action_target == 0) state.action_targets.length - 1 else state.action_target - 1,
                         );
-                        anim_start_frame = gfx.frame_counter;
+                        gfx.move_anim_start_frame = gfx.frame_counter;
                     }
                 }
             }
         },
         .commit => {
-            gfx.move_animation_frame = gfx.frame_counter - anim_start_frame;
-            if (gfx.move_animation_frame > gfx.move_animation_length) {
+            if (gfx.frame_counter > gfx.move_anim_start_frame + gfx.move_animation_length) {
                 switch (state.player.entity.state) {
                     .walk => {
                         state.player.entity.location = state.player.entity.target_location;
@@ -975,13 +971,12 @@ fn game_screen(state: anytype, newest_input: anytype) void {
                 respond_to_move(state);
                 update_world_visibilty(state);
                 state.player.entity.state = .idle;
-                anim_start_frame = gfx.frame_counter;
+                gfx.move_anim_start_frame = gfx.frame_counter;
                 state.turn_state = .response;
             }
         },
         .response => {
-            gfx.move_animation_frame = gfx.frame_counter - anim_start_frame;
-            if (gfx.move_animation_frame > gfx.move_animation_length) {
+            if (gfx.frame_counter > gfx.move_anim_start_frame + gfx.move_animation_length) {
                 entities_complete_move(&state.monsters);
                 entities_complete_move(&state.fire_monsters);
                 entities_complete_move(&state.charge_monsters);
@@ -1010,42 +1005,6 @@ fn game_screen(state: anytype, newest_input: anytype) void {
         .dead => {},
     }
 
-    gfx.move_animation_frame = switch (state.turn_state) {
-        .aim, .commit, .response => gfx.frame_counter - anim_start_frame,
-        else => 0,
-    };
-
-    { // update camera
-        if (state.turn_state == .aim and state.action_targets.length > 0) {
-            // move to aim target
-            if (gfx.move_animation_frame <= gfx.move_animation_length) {
-                const target_location = state.action_targets.get(state.action_target) catch {
-                    platform.trace("error: failed to get action target");
-                    unreachable;
-                };
-                camera_world_pos = world.Position.from_map_location(camera_location, 0).lerp_to(
-                    world.Position.from_map_location(target_location, 0),
-                    gfx.move_animation_frame,
-                    gfx.move_animation_length,
-                );
-            } else {
-                camera_location = state.action_targets.get(state.action_target) catch {
-                    platform.trace("error: failed to get action target");
-                    unreachable;
-                };
-                camera_world_pos = world.Position.from_map_location(camera_location, 0);
-            }
-        } else {
-            // follow player
-            camera_location = state.player.entity.location;
-            camera_world_pos = world.Position.from_map_location(camera_location, 0).lerp_to(
-                world.Position.from_map_location(state.player.entity.target_location, 0),
-                gfx.move_animation_frame,
-                gfx.move_animation_length,
-            );
-        }
-    }
-
     defer {
         state.player.entity.did_receive_damage = false;
         for (state.monsters) |*monster| {
@@ -1059,14 +1018,14 @@ fn game_screen(state: anytype, newest_input: anytype) void {
         }
     }
 
-    gfx.draw_game(state, camera_world_pos);
-    
+    gfx.draw_game(state);
+
     if (state.turn_state == .dead) {
         gfx.draw_transparent_overlay();
         stats_screen(state, newest_input, "YOU DIED", .reload, null);
         menu_option = state.level;
     } else {
-        gfx.draw_hud(state, camera_world_pos);
+        gfx.draw_hud(state);
     }
 }
 
