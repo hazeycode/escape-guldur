@@ -5,7 +5,7 @@ pub fn StaticList(
     comptime max_length: usize,
 ) type {
     return struct {
-        elements: [max_length]ElementType = undefined,
+        elements: [max_length]ElementType = std.mem.zeroes([max_length]ElementType),
         length: usize = 0,
 
         pub fn push(self: *@This(), element: ElementType) !void {
@@ -25,6 +25,7 @@ pub fn StaticList(
                 );
             }
             self.length -= 1;
+            self.elements[self.length] = std.mem.zeroes(ElementType);
             return ret;
         }
 
