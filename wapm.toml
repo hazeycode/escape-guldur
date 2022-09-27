@@ -1,6 +1,6 @@
 [package]
 name = "hazeycode/escape-guldur"
-version = "0.2.2"
+version = "0.2.3"
 description = "Retro action-rpg game written in Zig"
 readme = "README.md"
 repository = "https://github.com/hazeycode/escape-guldur/"
