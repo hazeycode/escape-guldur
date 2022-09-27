@@ -627,11 +627,11 @@ fn update_charge_monster(state: *State, monster: *Enemy) void {
                     if (vertically_aligned) {
                         const dy = state.player.entity.location.y - monster.entity.location.y;
                         const dir: world.Direction = if (dy < 0) .north else .south;
-                        charge_monster_begin_charge(monster, dir, @intCast(u16, if (dy < 0) -dy else dy) + 16);
+                        charge_monster_begin_charge(monster, dir, @intCast(u16, if (dy < 0) -dy else dy) + 14);
                     } else if (horizontally_aligned) {
                         const dx = state.player.entity.location.x - monster.entity.location.x;
                         const dir: world.Direction = if (dx < 0) .west else .east;
-                        charge_monster_begin_charge(monster, dir, @intCast(u16, if (dx < 0) -dx else dx) + 16);
+                        charge_monster_begin_charge(monster, dir, @intCast(u16, if (dx < 0) -dx else dx) + 14);
                     }
                     return;
                 }
@@ -751,16 +751,16 @@ fn update_charge_monster(state: *State, monster: *Enemy) void {
 }
 
 fn charge_monster_begin_charge(monster: *Enemy, dir: world.Direction, dist: u16) void {
+    platform.trace("charge_monster: begin charge");
     const speed = 2;
-    var i = @divTrunc(dist, speed);
-    platform.tracef("charge_monster: set path with length %d", i);
     var next_location = monster.entity.location;
-    while (i > 0) : (i -= 1) {
-        next_location = next_location.walk(dir, speed);
+    var moved: u16 = 0;
+    while (moved <= dist) : (moved += speed) {
         monster.path.push(next_location) catch {
             platform.trace("error: failed to append to path. out of space");
             unreachable;
         };
+        next_location = next_location.walk(dir, speed);
     }
     monster.entity.state = .charge;
     monster.entity.look_direction = dir;
