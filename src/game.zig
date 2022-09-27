@@ -1019,7 +1019,6 @@ fn game_screen(state: anytype, newest_input: anytype) void {
         if (state.turn_state == .aim and state.action_targets.length > 0) {
             // move to aim target
             if (gfx.move_animation_frame <= gfx.move_animation_length) {
-                // TODO: Move to gfx_wasm4.zig
                 const target_location = state.action_targets.get(state.action_target) catch {
                     platform.trace("error: failed to get action target");
                     unreachable;
@@ -1030,7 +1029,6 @@ fn game_screen(state: anytype, newest_input: anytype) void {
                     gfx.move_animation_length,
                 );
             } else {
-                // TODO: Move to gfx_wasm4.zig
                 camera_location = state.action_targets.get(state.action_target) catch {
                     platform.trace("error: failed to get action target");
                     unreachable;
@@ -1039,7 +1037,6 @@ fn game_screen(state: anytype, newest_input: anytype) void {
             }
         } else {
             // follow player
-            // TODO: Move to gfx_wasm4.zig
             camera_location = state.player.entity.location;
             camera_world_pos = world.Position.from_map_location(camera_location, 0).lerp_to(
                 world.Position.from_map_location(state.player.entity.target_location, 0),
