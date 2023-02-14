@@ -40,7 +40,7 @@ pub inline fn rect(x: i32, y: i32, width: u32, height: u32) void {
     w4.rect(x, y, width, height);
 }
 
-pub inline fn oval(x: i32, y: i32, width: i32, height: i32) void {
+pub inline fn oval(x: i32, y: i32, width: u32, height: u32) void {
     w4.oval(x, y, width, height);
 }
 
@@ -48,8 +48,8 @@ pub fn blit(
     texture_bytes: []const u8,
     x: i32,
     y: i32,
-    width: i32,
-    height: i32,
+    width: u32,
+    height: u32,
     bpp: u8,
     flip_x: bool,
 ) void {
