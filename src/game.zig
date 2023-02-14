@@ -69,21 +69,20 @@ pub var input_queue = struct {
 }{};
 
 pub const ButtonPressEvent = packed struct {
-    left: u1,
-    right: u1,
-    up: u1,
-    down: u1,
-    action_1: u1,
-    action_2: u1,
-    _: u2 = 0,
+    left: bool,
+    right: bool,
+    up: bool,
+    down: bool,
+    action_1: bool,
+    action_2: bool,
 
-    pub fn any_pressed(self: @This()) bool {
-        return (self.left > 0 or
-            self.right > 0 or
-            self.up > 0 or
-            self.down > 0 or
-            self.action_1 > 0 or
-            self.action_2 > 0);
+    pub fn anyPressed(self: @This()) bool {
+        return (self.left or
+            self.right or
+            self.up or
+            self.down or
+            self.action_1 or
+            self.action_2);
     }
 };
 
@@ -860,16 +859,16 @@ pub fn init() void {
 
 pub fn update(input: anytype) void {
     switch (screen) {
-        .title => title_screen(&game_state, input),
-        .controls => controls_screen(input),
-        .game => game_screen(&game_state, input),
-        .reload => reload_screen(&game_state, input),
-        .win => stats_screen(&game_state, input, "YOU ESCAPED", .title, null),
+        .title => screenTitle(&game_state, input),
+        .controls => screenControls(input),
+        .game => screenGame(&game_state, input),
+        .reload => screenReload(&game_state, input),
+        .win => screenStats(&game_state, input, "YOU ESCAPED", .title, null),
     }
     gfx.frame_counter += 1;
 }
 
-fn game_screen(state: anytype, newest_input: anytype) void {
+fn screenGame(state: anytype, newest_input: anytype) void {
     if (state.level == data.levels.len) {
         screen = .win;
         menu_option = 0;
@@ -877,14 +876,14 @@ fn game_screen(state: anytype, newest_input: anytype) void {
         return;
     }
 
-    if (newest_input.any_pressed()) {
+    if (newest_input.anyPressed()) {
         input_queue.push(newest_input);
     }
 
     switch (state.turn_state) {
         .ready => {
             if (input_queue.pop()) |input| {
-                if (input.action_1 > 0) {
+                if (input.action_1) {
                     platform.trace("aim item");
                     find_action_targets(state) catch {
                         platform.trace("error: failed to find action targets");
@@ -892,16 +891,16 @@ fn game_screen(state: anytype, newest_input: anytype) void {
                     state.action_target = 0;
                     state.turn_state = .aim;
                     gfx.move_anim_start_frame = gfx.frame_counter;
-                } else if (input.action_2 > 0) {
+                } else if (input.action_2) {
                     try_cycle_item(state);
-                } else if (input.up > 0) {
+                } else if (input.up) {
                     try_move(state, state.player.entity.location.walk(.north, 1));
-                } else if (input.right > 0) {
+                } else if (input.right) {
                     gfx.flip_player_sprite = false;
                     try_move(state, state.player.entity.location.walk(.east, 1));
-                } else if (input.down > 0) {
+                } else if (input.down) {
                     try_move(state, state.player.entity.location.walk(.south, 1));
-                } else if (input.left > 0) {
+                } else if (input.left) {
                     gfx.flip_player_sprite = true;
                     try_move(state, state.player.entity.location.walk(.west, 1));
                 }
@@ -909,7 +908,7 @@ fn game_screen(state: anytype, newest_input: anytype) void {
         },
         .aim => {
             if (input_queue.pop()) |input| {
-                if (input.action_1 > 0) {
+                if (input.action_1) {
                     if (state.action_targets.length == 0) {
                         cancel_aim(state);
                     } else {
@@ -932,17 +931,17 @@ fn game_screen(state: anytype, newest_input: anytype) void {
                             },
                         }
                     }
-                } else if (input.action_2 > 0) {
+                } else if (input.action_2) {
                     cancel_aim(state);
                 } else if (state.action_targets.length > 0) {
-                    if (input.up > 0 or input.right > 0) {
+                    if (input.up or input.right) {
                         sfx.walk();
                         state.action_target = @intCast(
                             u8,
                             if (state.action_target == state.action_targets.length - 1) 0 else state.action_target + 1,
                         );
                         gfx.move_anim_start_frame = gfx.frame_counter;
-                    } else if (input.down > 0 or input.left > 0) {
+                    } else if (input.down or input.left) {
                         sfx.walk();
                         state.action_target = @intCast(
                             u8,
@@ -1022,24 +1021,24 @@ fn game_screen(state: anytype, newest_input: anytype) void {
 
     if (state.turn_state == .dead) {
         gfx.draw_transparent_overlay();
-        stats_screen(state, newest_input, "YOU DIED", .reload, null);
+        screenStats(state, newest_input, "YOU DIED", .reload, null);
         menu_option = state.level;
     } else {
         gfx.draw_hud(state);
     }
 }
 
-fn title_screen(state: anytype, input: anytype) void {
+fn screenTitle(state: anytype, input: anytype) void {
     gfx.draw_title_menu();
 
-    if (input.action_1 > 0) {
+    if (input.action_1) {
         sfx.walk();
         screen = .game;
         menu_option = 0;
         state.reset();
         state.load_level(0);
         platform.trace("start game");
-    } else if (input.action_2 > 0) {
+    } else if (input.action_2) {
         sfx.walk();
         screen = .controls;
         menu_option = 0;
@@ -1047,10 +1046,10 @@ fn title_screen(state: anytype, input: anytype) void {
     }
 }
 
-fn controls_screen(input: anytype) void {
+fn screenControls(input: anytype) void {
     gfx.draw_controls();
 
-    if (input.action_1 > 0 or input.action_2 > 0) {
+    if (input.action_1 or input.action_2) {
         sfx.walk();
         screen = .title;
         menu_option = 0;
@@ -1058,7 +1057,7 @@ fn controls_screen(input: anytype) void {
     }
 }
 
-fn stats_screen(
+fn screenStats(
     state: anytype,
     input: anytype,
     title_text: []const u8,
@@ -1076,21 +1075,21 @@ fn stats_screen(
         // .elapsed_s = elapsed_seconds,
     });
 
-    if (input.action_1 > 0) {
+    if (input.action_1) {
         sfx.walk();
         screen = advance_screen;
         return;
     }
 
     if (maybe_retreat_screen) |retreat_screen| {
-        if (input.action_1 > 0) {
+        if (input.action_1) {
             sfx.walk();
             screen = retreat_screen;
         }
     }
 }
 
-fn reload_screen(state: anytype, input: anytype) void {
+fn screenReload(state: anytype, input: anytype) void {
     switch (state.level) {
         0 => {
             screen = .game;
@@ -1098,7 +1097,7 @@ fn reload_screen(state: anytype, input: anytype) void {
             state.load_level(0);
         },
         else => {
-            if (input.action_1 > 0) {
+            if (input.action_1) {
                 screen = .game;
                 defer menu_option = 0;
                 state.load_level(menu_option);
@@ -1107,9 +1106,9 @@ fn reload_screen(state: anytype, input: anytype) void {
                 state.player.active_item = player_level_starting_active_item[menu_option];
             }
 
-            if (input.up > 0 or input.right > 0) {
+            if (input.up or input.right) {
                 menu_option = if (menu_option == state.level) 0 else menu_option + 1;
-            } else if (input.down > 0 or input.left > 0) {
+            } else if (input.down or input.left) {
                 menu_option = if (menu_option == 0) state.level else menu_option - 1;
             }
 
