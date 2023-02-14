@@ -27,38 +27,38 @@ var player_level_starting_items: [6]u8 = .{ 0b1, 0, 0, 0, 0, 0 };
 var player_level_starting_active_item: [6]Player.Item = .{.fists} ** 6;
 var game_state: State = .{};
 
-pub var input_queue = struct {
-    inputs: [8]ButtonPressEvent = undefined,
+pub var button_press_ev_queue = struct {
+    buf: [8]ButtonsPressed = undefined,
     count: usize = 0,
     read_cursor: usize = 0,
     write_cursor: usize = 0,
 
-    pub fn push(self: *@This(), input: ButtonPressEvent) void {
-        self.inputs[self.write_cursor] = input;
+    pub fn push(self: *@This(), input: ButtonsPressed) void {
+        self.buf[self.write_cursor] = input;
         self.write_cursor = @mod(
             self.write_cursor + 1,
-            self.inputs.len,
+            self.buf.len,
         );
-        if (self.count == self.inputs.len) {
+        if (self.count == self.buf.len) {
             platform.trace("warning: input queue overflow");
             self.read_cursor = @mod(
                 self.read_cursor + 1,
-                self.inputs.len,
+                self.buf.len,
             );
         } else {
             self.count += 1;
         }
     }
 
-    pub fn pop(self: *@This()) ?ButtonPressEvent {
+    pub fn pop(self: *@This()) ?ButtonsPressed {
         if (self.count == 0) {
             return null;
         }
         defer {
-            self.read_cursor = @mod(self.read_cursor + 1, self.inputs.len);
+            self.read_cursor = @mod(self.read_cursor + 1, self.buf.len);
             self.count -= 1;
         }
-        return self.inputs[self.read_cursor];
+        return self.buf[self.read_cursor];
     }
 
     pub fn clear(self: *@This()) void {
@@ -68,7 +68,7 @@ pub var input_queue = struct {
     }
 }{};
 
-pub const ButtonPressEvent = packed struct {
+pub const ButtonState = packed struct {
     left: bool,
     right: bool,
     up: bool,
@@ -85,6 +85,8 @@ pub const ButtonPressEvent = packed struct {
             self.action_2);
     }
 };
+
+pub const ButtonsPressed = ButtonState;
 
 pub const Screen = enum { title, controls, game, reload, win };
 
@@ -177,7 +179,7 @@ pub const State = struct {
     pub fn load_level(self: *@This(), level: u8) void {
         platform.trace("load_level");
 
-        input_queue.clear();
+        button_press_ev_queue.clear();
 
         self.turn_state = .ready;
         self.action_targets.clear();
@@ -857,18 +859,20 @@ pub fn init() void {
     gfx.init();
 }
 
-pub fn update(input: anytype) void {
+pub fn update(buttons: ButtonState, pressed: ButtonsPressed) void {
     switch (screen) {
-        .title => screenTitle(&game_state, input),
-        .controls => screenControls(input),
-        .game => screenGame(&game_state, input),
-        .reload => screenReload(&game_state, input),
-        .win => screenStats(&game_state, input, "YOU ESCAPED", .title, null),
+        .title => screenTitle(&game_state, pressed),
+        .controls => screenControls(pressed),
+        .game => screenGame(&game_state, buttons, pressed),
+        .reload => screenReload(&game_state, pressed),
+        .win => screenStats(&game_state, pressed, "YOU ESCAPED", .title, null),
     }
     gfx.frame_counter += 1;
 }
 
-fn screenGame(state: anytype, newest_input: anytype) void {
+fn screenGame(state: anytype, buttons: ButtonState, pressed: ButtonsPressed) void {
+    _ = buttons;
+
     if (state.level == data.levels.len) {
         screen = .win;
         menu_option = 0;
@@ -876,13 +880,13 @@ fn screenGame(state: anytype, newest_input: anytype) void {
         return;
     }
 
-    if (newest_input.anyPressed()) {
-        input_queue.push(newest_input);
+    if (pressed.anyPressed()) {
+        button_press_ev_queue.push(pressed);
     }
 
     switch (state.turn_state) {
         .ready => {
-            if (input_queue.pop()) |input| {
+            if (button_press_ev_queue.pop()) |input| {
                 if (input.action_1) {
                     platform.trace("aim item");
                     find_action_targets(state) catch {
@@ -907,7 +911,7 @@ fn screenGame(state: anytype, newest_input: anytype) void {
             }
         },
         .aim => {
-            if (input_queue.pop()) |input| {
+            if (button_press_ev_queue.pop()) |input| {
                 if (input.action_1) {
                     if (state.action_targets.length == 0) {
                         cancel_aim(state);
@@ -1021,7 +1025,7 @@ fn screenGame(state: anytype, newest_input: anytype) void {
 
     if (state.turn_state == .dead) {
         gfx.draw_transparent_overlay();
-        screenStats(state, newest_input, "YOU DIED", .reload, null);
+        screenStats(state, pressed, "YOU DIED", .reload, null);
         menu_option = state.level;
     } else {
         gfx.draw_hud(state);
