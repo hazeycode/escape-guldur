@@ -121,8 +121,8 @@ fn sprite_list_draw_shadows(sprite_list: *SpriteList, visibilty_map: anytype, an
                 platform.oval(
                     screen_pos.x - 3,
                     screen_pos.y - 1,
-                    6,
-                    2,
+                    7,
+                    3,
                 );
             }
         }

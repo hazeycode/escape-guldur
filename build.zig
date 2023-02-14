@@ -3,17 +3,17 @@ const std = @import("std");
 const platform_wasm4_pkg = make_pkg("platform", "src/platform_wasm4.zig", &[_]std.build.Pkg{});
 const platform_null_pkg = make_pkg("platform", "src/platform_null.zig", &[_]std.build.Pkg{});
 
-const gfx_wasm4_pkg = make_pkg("gfx", "src/gfx_wasm4.zig", ([_]std.build.Pkg{platform_wasm4_pkg})[0..]);
+const gfx_pkg = make_pkg("gfx", "src/gfx.zig", ([_]std.build.Pkg{platform_wasm4_pkg})[0..]);
 
-const sfx_wasm4_pkg = make_pkg("sfx", "src/sfx.zig", ([_]std.build.Pkg{platform_wasm4_pkg})[0..]);
+const sfx_pkg = make_pkg("sfx", "src/sfx.zig", ([_]std.build.Pkg{platform_wasm4_pkg})[0..]);
 
 pub fn build(b: *std.build.Builder) !void {
     const tests = b.addTest("src/tests.zig");
     tests.setBuildMode(b.standardReleaseOptions());
 
     tests.addPackage(platform_null_pkg);
-    tests.addPackage(gfx_wasm4_pkg);
-    tests.addPackage(sfx_wasm4_pkg);
+    tests.addPackage(gfx_pkg);
+    tests.addPackage(sfx_pkg);
 
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&tests.step);
@@ -33,8 +33,8 @@ fn build_wasm4(b: *std.build.Builder) !void {
     cart.install();
 
     cart.addPackage(platform_wasm4_pkg);
-    cart.addPackage(gfx_wasm4_pkg);
-    cart.addPackage(sfx_wasm4_pkg);
+    cart.addPackage(gfx_pkg);
+    cart.addPackage(sfx_pkg);
 
     cart.addPackage(.{
         .name = "data",
