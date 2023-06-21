@@ -7,6 +7,7 @@ A "retro" action-RPG written in [Zig](https://ziglang.org/) for the [WASM-4 fant
 <img src="https://img.itch.zone/aW1hZ2UvMTY3Mjc1OC85OTc2OTUxLnBuZw==/original/01aMWA.png" alt="screenshot" width="240"/>
 <img src="https://img.itch.zone/aW1hZ2UvMTY3Mjc1OC85OTc2OTU0LnBuZw==/250x600/gOUx0S.png" alt="screenshot" width="240"/>
 </p>
+
 ## Building
 
 #### Requirements
