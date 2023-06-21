@@ -2,8 +2,11 @@
 
 A "retro" action-RPG written in [Zig](https://ziglang.org/) for the [WASM-4 fantasy console](https://wasm4.org/). Originally made for [WASM-4 Jam #2](https://itch.io/jam/wasm4-v2).
 
-<img src="assets/images/screen_cap_001.png" alt="screenshot" width="320"/>
-
+<p float="left">
+<img src="https://img.itch.zone/aW1nLzk5NzcxOTgucG5n/original/YTwG%2FT.png" alt="screenshot" width="240"/>
+<img src="https://img.itch.zone/aW1hZ2UvMTY3Mjc1OC85OTc2OTUxLnBuZw==/original/01aMWA.png" alt="screenshot" width="240"/>
+<img src="https://img.itch.zone/aW1hZ2UvMTY3Mjc1OC85OTc2OTU0LnBuZw==/250x600/gOUx0S.png" alt="screenshot" width="240"/>
+</p>
 ## Building
 
 #### Requirements
