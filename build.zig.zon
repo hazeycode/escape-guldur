@@ -1,0 +1,19 @@
+.{
+    .name = .EscapeGuldur,
+    .fingerprint = 0x41c109b4eadf6b69,
+    .version = "0.3.0-dev",
+    .description = "A minimalistic \"retro action RPG\" written in Zig for the WASM-4 fantasy console",
+    .license = "MIT",
+    .repository = "https://github.com/hazeycode/escape-guldur",
+    .minimum_zig_version = "0.14.1",
+    .dependencies = .{},
+    .paths = .{
+        "assets",
+        "src",
+        "build.zig",
+        "build.zig.zon",
+        "wapm.toml",
+        "LICENSE.md",
+        "README.md",
+    },
+}

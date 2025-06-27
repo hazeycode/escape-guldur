@@ -1,9 +1,8 @@
 const std = @import("std");
 
-const util = @import("util.zig");
-const StaticList = util.StaticList;
+const util = @import("util");
 
-const bresenham_line = @import("bresenham.zig").line;
+const bresenham_line = @import("bresenham").line;
 
 pub const map_columns = 20;
 pub const map_rows = 20;
@@ -42,17 +41,17 @@ pub const Position = struct {
 
     pub fn to_map_location(self: @This()) MapLocation {
         return .{
-            .x = @intCast(i16, @divTrunc(self.x, map_world_scale)),
-            .y = @intCast(i16, @divTrunc(self.y, map_world_scale)),
+            .x = @as(i16, @intCast(@divTrunc(self.x, map_world_scale))),
+            .y = @as(i16, @intCast(@divTrunc(self.y, map_world_scale))),
         };
     }
 
     pub fn lerp_to(self: @This(), to: @This(), frame: usize, total_frames: usize) @This() {
         var res = self;
-        const dt = @intToFloat(f32, frame) / @intToFloat(f32, total_frames);
-        res.x += @floatToInt(i32, @intToFloat(f32, to.x - self.x) * dt);
-        res.y += @floatToInt(i32, @intToFloat(f32, to.y - self.y) * dt);
-        res.z += @floatToInt(i32, @intToFloat(f32, to.z - self.z) * dt);
+        const dt = @as(f32, @floatFromInt(frame)) / @as(f32, @floatFromInt(total_frames));
+        res.x += @as(i32, @intFromFloat(@as(f32, @floatFromInt(to.x - self.x)) * dt));
+        res.y += @as(i32, @intFromFloat(@as(f32, @floatFromInt(to.y - self.y)) * dt));
+        res.z += @as(i32, @intFromFloat(@as(f32, @floatFromInt(to.z - self.z)) * dt));
         return res;
     }
 };
@@ -105,7 +104,7 @@ pub const Direction = enum(u3) {
     };
 };
 
-pub const Path = StaticList(MapLocation, max_map_distance);
+pub const Path = std.BoundedArray(MapLocation, max_map_distance);
 
 pub const MapLocation = struct {
     x: i16,
@@ -129,13 +128,13 @@ pub const MapLocation = struct {
     }
 
     pub fn manhattan_to(self: MapLocation, other: MapLocation) u8 {
-        var dx = @intCast(i32, other.x) - @intCast(i32, self.x);
-        var dy = @intCast(i32, other.y) - @intCast(i32, self.y);
+        var dx = @as(i32, @intCast(other.x)) - @as(i32, @intCast(self.x));
+        var dy = @as(i32, @intCast(other.y)) - @as(i32, @intCast(self.y));
 
         if (dx < 0) dx = -dx;
         if (dy < 0) dy = -dy;
 
-        return @intCast(u8, dx + dy);
+        return @as(u8, @intCast(dx + dy));
     }
 
     pub inline fn north(self: MapLocation, distance: u8) MapLocation {
@@ -188,14 +187,14 @@ pub fn check_line_of_sight(
         result: LineOfSightResult = .{},
 
         pub fn plot(self: *@This(), x: i32, y: i32) bool {
-            const location = MapLocation{ .x = @intCast(u8, x), .y = @intCast(u8, y) };
+            const location = MapLocation{ .x = @intCast(x), .y = @intCast(y) };
 
             switch (map_get_tile_kind(self.world_map, location)) {
                 .wall, .breakable_wall => return false,
                 else => {},
             }
 
-            self.result.path.push(location) catch {
+            self.result.path.append(location) catch {
                 return false;
             };
 
@@ -212,10 +211,10 @@ pub fn check_line_of_sight(
     };
 
     bresenham_line(
-        @intCast(i32, origin.x),
-        @intCast(i32, origin.y),
-        @intCast(i32, target.x),
-        @intCast(i32, target.y),
+        @as(i32, @intCast(origin.x)),
+        @as(i32, @intCast(origin.y)),
+        @as(i32, @intCast(target.x)),
+        @as(i32, @intCast(target.y)),
         &plotter,
     );
 
@@ -226,23 +225,22 @@ pub fn map_set_tile(world: anytype, location: MapLocation, value: u4) void {
     if (location.x < 0 or location.x > map_columns or location.y < 0 or location.y > map_rows) {
         return;
     }
-    world[@intCast(usize, location.y)][@intCast(usize, location.x)] = value;
+    world[@intCast(location.y)][@intCast(location.x)] = value;
 }
 
 pub fn map_get_tile(world: anytype, location: MapLocation) u4 {
     if (location.x < 0 or location.x > map_columns or location.y < 0 or location.y > map_rows) {
         return 0;
     }
-    return world[@intCast(usize, location.y)][@intCast(usize, location.x)];
+    return world[@intCast(location.y)][@intCast(location.x)];
 }
 
 pub fn map_get_tile_kind(world: anytype, location: MapLocation) MapTileKind {
     if (location.x < 0 or location.x > map_columns or location.y < 0 or location.y > map_rows) {
         return .wall;
     }
-    return @intToEnum(
-        MapTileKind,
-        world[@intCast(usize, location.y)][@intCast(usize, location.x)],
+    return @enumFromInt(
+        world[@intCast(location.y)][@intCast(location.x)],
     );
 }
 

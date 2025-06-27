@@ -2,12 +2,11 @@ const std = @import("std");
 
 const platform = @import("platform");
 
-const util = @import("util.zig");
+const util = @import("util");
 const count_digits_fast = util.count_digits_fast;
 const NumberDigitIterator = util.NumberDigitIterator;
-const StaticList = util.StaticList;
 
-const world = @import("world.zig");
+const world = @import("world");
 
 pub const max_sprites = 64;
 pub const move_animation_length = 3;
@@ -76,10 +75,10 @@ const Sprite = struct {
     decoration_texture: ?Texture = null,
 };
 
-const SpriteList = StaticList(Sprite, max_sprites);
+const SpriteList = std.BoundedArray(Sprite, max_sprites);
 
 fn sprite_list_draw(sprite_list: *SpriteList, visibilty_map: anytype, anim_frame: u32) void {
-    for (sprite_list.all()) |sprite| {
+    for (sprite_list.constSlice()) |*sprite| {
         const actual_world_position = sprite.world_position.lerp_to(
             sprite.target_world_position,
             anim_frame,
@@ -105,7 +104,7 @@ fn sprite_list_draw(sprite_list: *SpriteList, visibilty_map: anytype, anim_frame
 }
 
 fn sprite_list_draw_shadows(sprite_list: *SpriteList, visibilty_map: anytype, anim_frame: u32) void {
-    for (sprite_list.all()) |sprite| {
+    for (sprite_list.constSlice()) |*sprite| {
         if (sprite.casts_shadow) {
             const actual_world_position = sprite.world_position.lerp_to(
                 sprite.target_world_position,
@@ -134,8 +133,8 @@ fn sprite_list_draw_decorations(
     visibilty_map: anytype,
     anim_frame: u32,
 ) void {
-    for (sprite_list.all()) |sprite| {
-        if (sprite.decoration_texture) |decoration_texture| {
+    for (sprite_list.constSlice()) |*sprite| {
+        if (sprite.decoration_texture) |*decoration_texture| {
             const actual_world_position = sprite.world_position.lerp_to(
                 sprite.target_world_position,
                 anim_frame,
@@ -166,9 +165,9 @@ fn sprite_list_push_enemy_sprites(
     kind: enum { monster, fire_monster, charge_monster },
     enemies: anytype,
 ) void {
-    for (enemies) |*enemy| {
+    for (&enemies) |*enemy| {
         if (enemy.entity.health > 0) {
-            sprite_list.push(.{
+            sprite_list.append(.{
                 .texture = switch (kind) {
                     .monster => Texture.monster,
                     .fire_monster => Texture.fire_monster,
@@ -202,23 +201,17 @@ pub fn draw_game(state: anytype) void {
     };
 
     { // update camera
-        if (state.turn_state == .aim and state.action_targets.length > 0) {
+        if (state.turn_state == .aim and state.action_targets.len > 0) {
             // move to aim target
             if (move_animation_frame <= move_animation_length) {
-                const target_location = state.action_targets.get(state.action_target) catch {
-                    platform.trace("error: failed to get action target");
-                    unreachable;
-                };
+                const target_location = state.action_targets.get(state.action_target);
                 camera_world_pos = camera_world_pos.lerp_to(
                     world.Position.from_map_location(target_location, 0),
                     move_animation_frame,
                     move_animation_length,
                 );
             } else {
-                const camera_location = state.action_targets.get(state.action_target) catch {
-                    platform.trace("error: failed to get action target");
-                    unreachable;
-                };
+                const camera_location = state.action_targets.get(state.action_target);
                 camera_world_pos = world.Position.from_map_location(camera_location, 0);
             }
         } else {
@@ -238,9 +231,9 @@ pub fn draw_game(state: anytype) void {
     sprite_list_push_enemy_sprites(&sprite_list, .charge_monster, state.charge_monsters);
 
     // push pickup sprites
-    for (state.pickups) |*pickup| {
+    for (&state.pickups) |*pickup| {
         if (pickup.entity.health > 0) {
-            sprite_list.push(.{
+            sprite_list.append(.{
                 .texture = switch (pickup.kind) {
                     .health => Texture.heart,
                     .sword => Texture.sword,
@@ -260,7 +253,7 @@ pub fn draw_game(state: anytype) void {
     }
 
     { // push player sprite
-        sprite_list.push(.{
+        sprite_list.append(.{
             .texture = Texture.player,
             .draw_colours = if (state.player.entity.did_receive_damage) 0x40 else 0x20,
             .world_position = world.Position.from_map_location(state.player.entity.location, 0),
@@ -276,12 +269,12 @@ pub fn draw_game(state: anytype) void {
     }
 
     // push fire sprites
-    for (state.fire) |*fire| {
+    for (&state.fire) |*fire| {
         if (fire.entity.health <= 0) {
             continue;
         }
 
-        sprite_list.push(.{
+        sprite_list.append(.{
             .texture = Texture.fire_big,
             .draw_colours = 0x40,
             .world_position = world.Position.from_map_location(fire.entity.location, 0),
@@ -293,9 +286,9 @@ pub fn draw_game(state: anytype) void {
             platform.trace("warning: failed to push sprite. no space left");
         };
 
-        if (fire.path.length > 0) {
-            const next_location = fire.path.elements[if (fire.path.length > 1) 1 else 0];
-            sprite_list.push(.{
+        if (fire.path.len > 0) {
+            const next_location = fire.path.slice()[if (fire.path.len > 1) 1 else 0];
+            sprite_list.append(.{
                 .texture = Texture.fire_small,
                 .draw_colours = 0x40,
                 .world_position = world.Position.from_map_location(next_location, 0),
@@ -371,11 +364,8 @@ pub fn draw_game(state: anytype) void {
 
 pub fn draw_tile_markers(state: anytype) void {
     var i: usize = 0;
-    while (i < state.action_targets.length) : (i += 1) {
-        const target = state.action_targets.get(i) catch {
-            platform.tracef("error: failed to get action target %d", i);
-            unreachable;
-        };
+    while (i < state.action_targets.len) : (i += 1) {
+        const target = state.action_targets.get(i);
         const screen_pos = ScreenPosition.from_world_position(
             world.Position.from_map_location(target, 0),
             camera_world_pos,
@@ -408,15 +398,12 @@ pub fn draw_hud(state: anytype) void {
     if (state.turn_state == .aim) {
         platform.set_draw_colours(0x04);
 
-        if (state.action_targets.length == 0) {
+        if (state.action_targets.len == 0) {
             platform.text("NO TARGETS", 1, platform.screen_height - (8 + 1) * 2);
         } else {
             platform.text("AIM", 1, platform.screen_height - (8 + 1) * 2);
 
-            const active_target = state.action_targets.get(state.action_target) catch {
-                platform.trace("error: failed to get active action target");
-                unreachable;
-            };
+            const active_target = state.action_targets.get(state.action_target);
 
             const screen_pos = ScreenPosition.from_world_position(
                 world.Position.from_map_location(active_target, 0),
@@ -446,9 +433,9 @@ pub fn draw_hud(state: anytype) void {
         const piece_width: u16 = 8;
         const piece_height: u16 = 8;
         if (state.player.entity.health > 0) {
-            const width: u16 = @bitCast(u8, state.player.entity.health) * piece_width;
-            const y = @intCast(i32, platform.screen_height) - piece_height - 1;
-            var x: i32 = @intCast(i32, platform.screen_width) - width - 1;
+            const width: u16 = @as(u16, @intCast(state.player.entity.health)) * piece_width;
+            const y = @as(i32, @intCast(platform.screen_height)) - piece_height - 1;
+            var x: i32 = @as(i32, @intCast(platform.screen_width)) - @as(i32, @intCast(width)) - 1;
             var i: usize = 0;
             while (i < state.player.entity.health) : (i += 1) {
                 platform.blit(
@@ -486,7 +473,7 @@ pub fn draw_stats(stats: anytype) void {
         const postfix = " turns taken";
         const y = platform.screen_height / 3 * 2;
         const w = 8 * (count_digits_fast(stats.turns_taken) + 1 + postfix.len);
-        var x = @intCast(i32, platform.screen_width / 2 - w / 2);
+        var x = @as(i32, @intCast(platform.screen_width / 2 - w / 2));
         x += draw_text_number(stats.turns_taken, x, y);
         x += 8;
         platform.text(postfix, x, y);
@@ -594,8 +581,7 @@ pub fn draw_text_number(number: anytype, x: i32, y: i32) u16 {
         platform.text("-", x + dx, y);
     }
 
-    const number_abs = @intCast(
-        u32,
+    const number_abs: u32 = @intCast(
         if (number < 0) -number else number,
     );
 
@@ -613,7 +599,7 @@ pub fn text_centered(str: []const u8, y: i32) void {
     const text_width = str.len * glyph_width;
     platform.text(
         str,
-        @intCast(i32, platform.screen_width / 2 - text_width / 2),
+        @as(i32, @intCast(platform.screen_width / 2 - text_width / 2)),
         y,
     );
 }

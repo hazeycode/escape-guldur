@@ -1,50 +1,5 @@
 const std = @import("std");
 
-pub fn StaticList(
-    comptime ElementType: type,
-    comptime max_length: usize,
-) type {
-    return struct {
-        elements: [max_length]ElementType = std.mem.zeroes([max_length]ElementType),
-        length: usize = 0,
-
-        pub fn push(self: *@This(), element: ElementType) !void {
-            if (self.length >= max_length) return error.NoSpaceLeft;
-            self.elements[self.length] = element;
-            self.length += 1;
-        }
-
-        pub fn pop(self: *@This()) ?ElementType {
-            if (self.length == 0) return null;
-            const ret = self.elements[0];
-            if (self.length > 1) {
-                std.mem.copy(
-                    ElementType,
-                    self.elements[0..],
-                    self.elements[1..],
-                );
-            }
-            self.length -= 1;
-            self.elements[self.length] = std.mem.zeroes(ElementType);
-            return ret;
-        }
-
-        pub fn clear(self: *@This()) void {
-            self.elements = std.mem.zeroes(@TypeOf(self.elements));
-            self.length = 0;
-        }
-
-        pub inline fn get(self: *@This(), index: usize) !ElementType {
-            if (index >= self.length) return error.InvalidElementAtIndex;
-            return self.elements[index];
-        }
-
-        pub inline fn all(self: *@This()) []ElementType {
-            return self.elements[0..self.length];
-        }
-    };
-}
-
 pub fn quicksort(
     values: anytype,
     low: isize,
@@ -63,17 +18,17 @@ fn partition(
     high: isize,
     comparitor: anytype,
 ) isize {
-    const pivot = values[@intCast(usize, high)];
+    const pivot = values[@intCast(high)];
     var i = low - 1;
-    var j = @intCast(usize, low);
+    var j: usize = @intCast(low);
     while (j < high) : (j += 1) {
         if (comparitor.compare(values[j], pivot)) {
             i += 1;
-            swap(values, @intCast(usize, i), j);
+            swap(values, @intCast(i), j);
         }
     }
     i += 1;
-    swap(values, @intCast(usize, i), @intCast(usize, high));
+    swap(values, @intCast(i), @intCast(high));
     return i;
 }
 
@@ -105,12 +60,12 @@ pub fn NumberDigitIterator(comptime T: type) type {
 
             self.n = @divTrunc(
                 self.number - self.m,
-                std.math.pow(T, 10, @intCast(T, self.i) - 1),
+                std.math.pow(T, 10, @as(T, @intCast(self.i)) - 1),
             );
 
-            self.m += self.n * std.math.pow(T, 10, @intCast(T, self.i) - 1);
+            self.m += self.n * std.math.pow(T, 10, @as(T, @intCast(self.i)) - 1);
 
-            return @truncate(u8, self.n);
+            return @as(u8, @truncate(self.n));
         }
     };
 }
@@ -132,7 +87,7 @@ pub fn count_digits_fast(number: anytype) usize {
 const testing = std.testing;
 
 test "quicksort" {
-    var comparitor = struct {
+    const comparitor = struct {
         pub fn compare(_: @This(), a: u32, b: u32) bool {
             return a < b;
         }

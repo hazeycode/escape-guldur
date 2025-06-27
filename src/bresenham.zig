@@ -5,10 +5,10 @@ const std = @import("std");
 pub fn line(x0: i32, y0: i32, x1: i32, y1: i32, plotter: anytype) void {
     var x = x0;
     var y = y0;
-    var dx = abs(x1 - x0);
-    var sx: i32 = if (x0 < x1) 1 else -1;
-    var dy = -abs(y1 - y0);
-    var sy: i32 = if (y0 < y1) 1 else -1;
+    const dx = abs(x1 - x0);
+    const sx: i32 = if (x0 < x1) 1 else -1;
+    const dy = -abs(y1 - y0);
+    const sy: i32 = if (y0 < y1) 1 else -1;
     var err = dx + dy;
 
     while (true) {

@@ -8,6 +8,7 @@
 // └───────────────────────────────────────────────────────────────────────────┘
 
 pub const SCREEN_SIZE: u32 = 160;
+pub const FONT_SIZE: u32 = 8;
 
 // ┌───────────────────────────────────────────────────────────────────────────┐
 // │                                                                           │
@@ -15,18 +16,18 @@ pub const SCREEN_SIZE: u32 = 160;
 // │                                                                           │
 // └───────────────────────────────────────────────────────────────────────────┘
 
-pub const PALETTE: *[4]u32 = @intToPtr(*[4]u32, 0x04);
-pub const DRAW_COLORS: *u16 = @intToPtr(*u16, 0x14);
-pub const GAMEPAD1: *const u8 = @intToPtr(*const u8, 0x16);
-pub const GAMEPAD2: *const u8 = @intToPtr(*const u8, 0x17);
-pub const GAMEPAD3: *const u8 = @intToPtr(*const u8, 0x18);
-pub const GAMEPAD4: *const u8 = @intToPtr(*const u8, 0x19);
-pub const MOUSE_X: *const i16 = @intToPtr(*const i16, 0x1a);
-pub const MOUSE_Y: *const i16 = @intToPtr(*const i16, 0x1c);
-pub const MOUSE_BUTTONS: *const u8 = @intToPtr(*const u8, 0x1e);
-pub const SYSTEM_FLAGS: *u8 = @intToPtr(*u8, 0x1f);
-pub const NETPLAY: *const u8 = @intToPtr(*const u8, 0x20);
-pub const FRAMEBUFFER: *[6400]u8 = @intToPtr(*[6400]u8, 0xA0);
+pub const PALETTE: *[4]u32 = @ptrFromInt(0x04);
+pub const DRAW_COLORS: *u16 = @ptrFromInt(0x14);
+pub const GAMEPAD1: *const u8 = @ptrFromInt(0x16);
+pub const GAMEPAD2: *const u8 = @ptrFromInt(0x17);
+pub const GAMEPAD3: *const u8 = @ptrFromInt(0x18);
+pub const GAMEPAD4: *const u8 = @ptrFromInt(0x19);
+pub const MOUSE_X: *const i16 = @ptrFromInt(0x1a);
+pub const MOUSE_Y: *const i16 = @ptrFromInt(0x1c);
+pub const MOUSE_BUTTONS: *const u8 = @ptrFromInt(0x1e);
+pub const SYSTEM_FLAGS: *u8 = @ptrFromInt(0x1f);
+pub const NETPLAY: *const u8 = @ptrFromInt(0x20);
+pub const FRAMEBUFFER: *[6400]u8 = @ptrFromInt(0xA0);
 
 pub const BUTTON_1: u8 = 1;
 pub const BUTTON_2: u8 = 2;
@@ -100,6 +101,7 @@ pub const TONE_MODE3: u32 = 8;
 pub const TONE_MODE4: u32 = 12;
 pub const TONE_PAN_LEFT: u32 = 16;
 pub const TONE_PAN_RIGHT: u32 = 32;
+pub const TONE_NOTE_MODE: u32 = 64;
 
 // ┌───────────────────────────────────────────────────────────────────────────┐
 // │                                                                           │

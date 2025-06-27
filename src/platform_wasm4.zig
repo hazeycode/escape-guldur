@@ -1,5 +1,6 @@
 const std = @import("std");
-const w4 = @import("wasm4.zig");
+
+pub const w4 = @import("wasm4.zig");
 
 pub const screen_width = w4.SCREEN_SIZE;
 pub const screen_height = w4.SCREEN_SIZE;
@@ -66,7 +67,7 @@ pub fn blit(
         },
     }
     if (flip_x) flags |= w4.BLIT_FLIP_X;
-    w4.blit(@ptrCast([*]const u8, texture_bytes), x, y, width, height, flags);
+    w4.blit(@ptrCast(texture_bytes), x, y, width, height, flags);
 }
 
 pub const AudioPlayback = struct {

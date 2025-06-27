@@ -1,4 +1,4 @@
-const w4 = @import("wasm4.zig");
+const w4 = @import("platform").w4;
 
 const game = @import("game.zig");
 

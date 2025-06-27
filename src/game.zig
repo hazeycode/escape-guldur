@@ -1,20 +1,19 @@
 const std = @import("std");
 const sqrt = std.math.sqrt;
-var rng = std.rand.DefaultPrng.init(42);
+var rng: std.Random.DefaultPrng = undefined;
 
 const platform = @import("platform");
 const gfx = @import("gfx");
 const sfx = @import("sfx");
 const data = @import("data");
 
-const util = @import("util.zig");
+const util = @import("util");
 const quicksort = util.quicksort;
-const StaticList = util.StaticList;
 
-const world = @import("world.zig");
+const world = @import("world");
 const WorldMap = world.Map(world.map_columns, world.map_rows);
 
-const bresenham_line = @import("bresenham.zig").line;
+const bresenham_line = @import("bresenham").line;
 
 const level_debug_override: ?u8 = if (false) 3 else null;
 
@@ -114,16 +113,16 @@ const Player = struct {
     pub const Item = enum(u8) { fists, sword, small_axe };
 
     pub fn has_item(self: Player, item: Item) bool {
-        return (self.items & (@as(u8, 1) << @intCast(u3, @enumToInt(item)))) > 0;
+        return (self.items & (@as(u8, 1) << @intCast(@intFromEnum(item)))) > 0;
     }
 
     pub fn give_item(self: *Player, item: Item) void {
-        self.items |= (@as(u8, 1) << @intCast(u3, @enumToInt(item)));
+        self.items |= (@as(u8, 1) << @intCast(@intFromEnum(item)));
         self.active_item = item;
     }
 
     pub fn remove_item(self: *Player, item: Item) void {
-        self.items &= ~(@as(u8, 1) << @intCast(u3, @enumToInt(item)));
+        self.items &= ~(@as(u8, 1) << @intCast(@intFromEnum(item)));
         if (self.active_item == item) {
             self.active_item = if (self.has_item(.sword)) .sword else .fists;
         }
@@ -155,7 +154,7 @@ pub const State = struct {
     turn: u32 = 0,
     level: u8 = 0,
     action_target: u8 = 0,
-    action_targets: StaticList(world.MapLocation, 16) = .{},
+    action_targets: std.BoundedArray(world.MapLocation, 16) = .{},
     world_map: WorldMap = undefined,
     world_vis_map: WorldMap = undefined,
     player: Player = undefined,
@@ -185,14 +184,14 @@ pub const State = struct {
         self.action_targets.clear();
 
         self.level = level_debug_override orelse level;
-        self.world_map = @bitCast(WorldMap, data.levels[self.level]);
+        self.world_map = @bitCast(data.levels[self.level]);
 
         // reset entity pools
-        for (self.monsters) |*monster| monster.entity.health = 0;
-        for (self.fire_monsters) |*fire_monster| fire_monster.entity.health = 0;
-        for (self.charge_monsters) |*charge_monster| charge_monster.entity.health = 0;
-        for (self.fire) |*fire| fire.entity.health = 0;
-        for (self.pickups) |*pickup| pickup.entity.health = 0;
+        for (&self.monsters) |*monster| monster.entity.health = 0;
+        for (&self.fire_monsters) |*fire_monster| fire_monster.entity.health = 0;
+        for (&self.charge_monsters) |*charge_monster| charge_monster.entity.health = 0;
+        for (&self.fire) |*fire| fire.entity.health = 0;
+        for (&self.pickups) |*pickup| pickup.entity.health = 0;
 
         // find spawners on level map and spawn things at those locations
         var location: world.MapLocation = .{ .x = 0, .y = 0 };
@@ -224,7 +223,7 @@ fn spawn_enemy(pool: anytype, location: world.MapLocation, health: u4) void {
             enemy.entity.set_location(location);
             enemy.entity.health = health;
             enemy.entity.state = .idle;
-            enemy.path.length = 0;
+            enemy.path.clear();
             platform.trace("spawned enemy");
             return;
         }
@@ -233,7 +232,7 @@ fn spawn_enemy(pool: anytype, location: world.MapLocation, health: u4) void {
 }
 
 fn spawn_pickup(state: *State, location: world.MapLocation, kind: anytype) void {
-    for (state.pickups) |*pickup| {
+    for (&state.pickups) |*pickup| {
         if (pickup.entity.health <= 0) {
             pickup.entity.set_location(location);
             pickup.entity.health = 1;
@@ -245,24 +244,25 @@ fn spawn_pickup(state: *State, location: world.MapLocation, kind: anytype) void 
     platform.trace("warning: pickup not spawned. no free space");
 }
 
-fn spawn_fire(state: *State, path: *world.Path) void {
+fn spawn_fire(state: *State, _path: world.Path) void {
+    var path = _path;
     if (path.pop()) |location| {
-        for (state.fire) |*fire| {
+        for (&state.fire) |*fire| {
             if (fire.entity.health <= 0) {
                 fire.entity.health = 1;
                 fire.entity.state = .walk;
                 fire.entity.set_location(location);
                 if (path.pop()) |next_location| {
                     fire.entity.target_location = next_location;
-                    fire.path.push(next_location) catch {
+                    fire.path.append(next_location) catch {
                         platform.trace("error: failed to queue fire path. no space left");
-                        unreachable;
+                        return;
                     };
                 }
                 while (path.pop()) |future_location| {
-                    fire.path.push(future_location) catch {
+                    fire.path.append(future_location) catch {
                         platform.trace("error: failed to queue fire path. no space left");
-                        unreachable;
+                        return;
                     };
                 }
                 platform.trace("spawned fire");
@@ -281,7 +281,7 @@ fn try_move(state: *State, location: world.MapLocation) void {
             return;
         },
         else => find_move: {
-            for (state.fire) |*fire| {
+            for (&state.fire) |*fire| {
                 if (fire.entity.health > 0 and
                     fire.entity.location.eql(location))
                 {
@@ -298,7 +298,7 @@ fn try_move(state: *State, location: world.MapLocation) void {
                 break :find_move;
             }
 
-            for (state.pickups) |*pickup| {
+            for (&state.pickups) |*pickup| {
                 if (pickup.entity.health > 0 and
                     pickup.entity.location.eql(location))
                 {
@@ -362,12 +362,12 @@ fn try_cycle_item(state: *State) void {
 
     const T = @TypeOf(state.player.items);
     const max = std.meta.fields(Player.Item).len;
-    var item = @enumToInt(state.player.active_item);
+    var item = @intFromEnum(state.player.active_item);
     var i: T = 0;
     while (i < max) : (i += 1) {
         item = @mod(item + 1, @as(u8, max));
-        if (state.player.has_item(@intToEnum(Player.Item, item))) {
-            state.player.active_item = @intToEnum(Player.Item, item);
+        if (state.player.has_item(@enumFromInt(item))) {
+            state.player.active_item = @enumFromInt(item);
             break;
         }
         platform.trace("dont possess item");
@@ -385,9 +385,9 @@ fn find_action_targets(state: *State) !void {
             try find_ranged_targets(state, state.fire_monsters);
             try find_ranged_targets(state, state.charge_monsters);
 
-            if (state.action_targets.length > 1) {
-                const targets = state.action_targets.all();
-                var distance_comparitor = struct {
+            if (state.action_targets.len > 1) {
+                const targets = state.action_targets.slice();
+                const distance_comparitor = struct {
                     state: *State,
                     pub fn compare(
                         self: @This(),
@@ -402,7 +402,7 @@ fn find_action_targets(state: *State) !void {
                 quicksort(
                     targets,
                     0,
-                    @intCast(isize, targets.len - 1),
+                    @intCast(targets.len - 1),
                     distance_comparitor,
                 );
             }
@@ -417,16 +417,16 @@ fn find_melee_targets(state: *State, directions: anytype) !void {
             entities_try_hit(&state.fire_monsters, location) orelse
             entities_try_hit(&state.charge_monsters, location)) |entity|
         {
-            try state.action_targets.push(entity.location);
+            try state.action_targets.append(entity.location);
         }
     }
 }
 
 fn find_ranged_targets(state: *State, potential_targets: anytype) !void {
-    for (potential_targets) |*target| {
+    for (&potential_targets) |*target| {
         if (target.entity.health > 0) {
             if (test_can_ranged_attack(state, target.entity.location)) {
-                try state.action_targets.push(target.entity.location);
+                try state.action_targets.append(target.entity.location);
             }
         }
     }
@@ -522,9 +522,9 @@ fn update_monster(state: *State, monster: *Enemy) void {
     platform.trace("monster: begin move...");
     defer platform.trace("monster: move complete");
 
-    var dx = state.player.entity.location.x - monster.entity.location.x;
-    var dy = state.player.entity.location.y - monster.entity.location.y;
-    const manhattan_dist = @intCast(u8, (if (dx < 0) -dx else dx) + if (dy < 0) -dy else dy);
+    const dx = state.player.entity.location.x - monster.entity.location.x;
+    const dy = state.player.entity.location.y - monster.entity.location.y;
+    const manhattan_dist: u8 = @intCast((if (dx < 0) -dx else dx) + if (dy < 0) -dy else dy);
 
     if (manhattan_dist == 1) {
         platform.trace("monster: hit player!");
@@ -593,7 +593,7 @@ fn update_fire_monster(state: *State, monster: *Enemy) void {
     const d = monster.entity.location.manhattan_to(state.player.entity.location);
 
     if (d > 3 and d < 20) {
-        var res = world.check_line_of_sight(
+        const res = world.check_line_of_sight(
             WorldMap,
             state.world_map,
             monster.entity.location,
@@ -601,7 +601,7 @@ fn update_fire_monster(state: *State, monster: *Enemy) void {
         );
         if (res.hit_target) {
             platform.trace("fire_monster: spit at player");
-            spawn_fire(state, &res.path);
+            spawn_fire(state, res.path);
             monster.entity.cooldown = 2;
             return;
         }
@@ -628,11 +628,11 @@ fn update_charge_monster(state: *State, monster: *Enemy) void {
                     if (vertically_aligned) {
                         const dy = state.player.entity.location.y - monster.entity.location.y;
                         const dir: world.Direction = if (dy < 0) .north else .south;
-                        charge_monster_begin_charge(monster, dir, @intCast(u16, if (dy < 0) -dy else dy) + 14);
+                        charge_monster_begin_charge(monster, dir, @as(u16, @intCast(if (dy < 0) -dy else dy)) + 14);
                     } else if (horizontally_aligned) {
                         const dx = state.player.entity.location.x - monster.entity.location.x;
                         const dir: world.Direction = if (dx < 0) .west else .east;
-                        charge_monster_begin_charge(monster, dir, @intCast(u16, if (dx < 0) -dx else dx) + 14);
+                        charge_monster_begin_charge(monster, dir, @as(u16, @intCast(if (dx < 0) -dx else dx)) + 14);
                     }
                     return;
                 }
@@ -648,7 +648,7 @@ fn update_charge_monster(state: *State, monster: *Enemy) void {
                     player_hit: bool = false,
 
                     pub fn plot(self: *@This(), x: i32, y: i32) bool {
-                        const location = world.MapLocation{ .x = @intCast(u8, x), .y = @intCast(u8, y) };
+                        const location = world.MapLocation{ .x = @intCast(x), .y = @intCast(y) };
                         switch (world.map_get_tile_kind(self.game_state.world_map, location)) {
                             .wall => {
                                 self.hit_impassable = true;
@@ -676,10 +676,10 @@ fn update_charge_monster(state: *State, monster: *Enemy) void {
                 };
 
                 bresenham_line(
-                    @intCast(i32, monster.entity.location.x),
-                    @intCast(i32, monster.entity.location.y),
-                    @intCast(i32, next_location.x),
-                    @intCast(i32, next_location.y),
+                    @as(i32, @intCast(monster.entity.location.x)),
+                    @as(i32, @intCast(monster.entity.location.y)),
+                    @as(i32, @intCast(next_location.x)),
+                    @as(i32, @intCast(next_location.y)),
                     &plotter,
                 );
 
@@ -702,7 +702,7 @@ fn update_charge_monster(state: *State, monster: *Enemy) void {
                                     .west => .east,
                                     else => {
                                         platform.trace("error: invalid charge direction");
-                                        unreachable;
+                                        return; // Return instead of unreachable
                                     },
                                 },
                                 1,
@@ -757,9 +757,9 @@ fn charge_monster_begin_charge(monster: *Enemy, dir: world.Direction, dist: u16)
     var next_location = monster.entity.location;
     var moved: u16 = 0;
     while (moved <= dist) : (moved += speed) {
-        monster.path.push(next_location) catch {
+        monster.path.append(next_location) catch {
             platform.trace("error: failed to append to path. out of space");
-            unreachable;
+            return; // Return instead of unreachable
         };
         next_location = next_location.walk(dir, speed);
     }
@@ -807,11 +807,12 @@ fn update_world_visibilty(state: *State) void {
             world.map_set_tile(&state.world_vis_map, location, 0);
             if (state.player.entity.location.manhattan_to(location) < 9 and
                 world.check_line_of_sight(
-                WorldMap,
-                state.world_map,
-                state.player.entity.location,
-                location,
-            ).hit_target) {
+                    WorldMap,
+                    state.world_map,
+                    state.player.entity.location,
+                    location,
+                ).hit_target)
+            {
                 world.map_set_tile(&state.world_vis_map, location, 1);
             }
         }
@@ -856,6 +857,7 @@ fn entities_complete_move(entities: anytype) void {
 }
 
 pub fn init() void {
+    rng = std.Random.DefaultPrng.init(42);
     gfx.init();
 }
 
@@ -913,14 +915,11 @@ fn screenGame(state: anytype, buttons: ButtonState, pressed: ButtonsPressed) voi
         .aim => {
             if (button_press_ev_queue.pop()) |input| {
                 if (input.action_1) {
-                    if (state.action_targets.length == 0) {
+                    if (state.action_targets.len == 0) {
                         cancel_aim(state);
                     } else {
                         platform.trace("commit action");
-                        const target_location = state.action_targets.get(state.action_target) catch {
-                            platform.trace("error: failed to get action target");
-                            unreachable;
-                        };
+                        const target_location = state.action_targets.get(state.action_target);
                         switch (state.player.active_item) {
                             .fists, .sword => try_move(state, target_location),
                             .small_axe => if (try_hit_enemy(state, target_location)) {
@@ -937,20 +936,18 @@ fn screenGame(state: anytype, buttons: ButtonState, pressed: ButtonsPressed) voi
                     }
                 } else if (input.action_2) {
                     cancel_aim(state);
-                } else if (state.action_targets.length > 0) {
+                } else if (state.action_targets.len > 0) {
                     if (input.up or input.right) {
                         sfx.walk();
-                        state.action_target = @intCast(
-                            u8,
-                            if (state.action_target == state.action_targets.length - 1) 0 else state.action_target + 1,
-                        );
+                        state.action_target = @as(u8, @intCast(
+                            if (state.action_target == state.action_targets.len - 1) 0 else state.action_target + 1,
+                        ));
                         gfx.move_anim_start_frame = gfx.frame_counter;
                     } else if (input.down or input.left) {
                         sfx.walk();
-                        state.action_target = @intCast(
-                            u8,
-                            if (state.action_target == 0) state.action_targets.length - 1 else state.action_target - 1,
-                        );
+                        state.action_target = @as(u8, @intCast(
+                            if (state.action_target == 0) state.action_targets.len - 1 else state.action_target - 1,
+                        ));
                         gfx.move_anim_start_frame = gfx.frame_counter;
                     }
                 }
@@ -1010,13 +1007,13 @@ fn screenGame(state: anytype, buttons: ButtonState, pressed: ButtonsPressed) voi
 
     defer {
         state.player.entity.did_receive_damage = false;
-        for (state.monsters) |*monster| {
+        for (&state.monsters) |*monster| {
             monster.entity.did_receive_damage = false;
         }
-        for (state.fire_monsters) |*monster| {
+        for (&state.fire_monsters) |*monster| {
             monster.entity.did_receive_damage = false;
         }
-        for (state.charge_monsters) |*monster| {
+        for (&state.charge_monsters) |*monster| {
             monster.entity.did_receive_damage = false;
         }
     }

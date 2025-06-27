@@ -11,41 +11,26 @@ A "retro" action-RPG written in [Zig](https://ziglang.org/) for the [WASM-4 fant
 ## Building
 
 #### Requirements
-- [Zig 0.10.x](https://github.com/ziglang/zig)
+- [Zig toolchain](https://github.com/ziglang/zig) (Recommended: [anyzig](https://github.com/marler8997/anyzig))
 - [WASM-4](https://wasm4.org/docs/getting-started/setup)
-- [wasm-opt](https://www.npmjs.com/package/wasm-opt)
+- [wasm-opt](https://www.npmjs.com/package/wasm-opt) (release builds only)
 
-Build and run all tests with:
+Build and run a native (debug) executable:
 ```shell
-zig build test
+zig build run-native
 ```
 
-Build (debug) the cart (zig-out/lib/cart.wasm) by running:
-
+Produce a size-optimised release build (zig-out/lib/opt.wasm):
 ```shell
-zig build
+zig build release -Doptimize=ReleaseSmall
 ```
 
-then run it with:
-
-```shell
-w4 watch zig-out/lib/cart.wasm
-```
-
-Produce a size-optimised release build (zig-out/lib/opt.wasm) by running:
-
-```shell
-zig build -Drelease-small=true release
-```
-
-and remember to test it with:
-
+Load and run in your browser:
 ```shell
 w4 run zig-out/lib/opt.wasm
 ```
 
 ## Distribution
-
 ```shell
 cp zig-out/lib.opt.wasm game.wasm
 wapm login
