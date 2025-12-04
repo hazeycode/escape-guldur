@@ -1,17 +1,17 @@
 [package]
 name = "hazeycode/escape-guldur"
-version = "0.2.4"
+version = "0.3.0-dev"
 description = "Retro action-rpg game written in Zig"
 readme = "README.md"
 repository = "https://github.com/hazeycode/escape-guldur/"
 
 [[module]]
-name = "game"
-source = "game.wasm"
+name = "cart"
+source = "./zig-out/bin/cart_opt.wasm"
 abi = "wasm4"
-interfaces = { wasm4 = "0.0.1" }
+interfaces = { wasm4 = "2.7.1" }
 
 [[command]]
-runner = "wasm4@0.0.1"
+runner = "wasm4@2.7.1"
 name = "play"
-module = "game"
+module = "cart"

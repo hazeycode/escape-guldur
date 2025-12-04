@@ -13,10 +13,10 @@ Originally made for [WASM-4 Jam #2](https://itch.io/jam/wasm4-v2).
 
 ## Building
 
-#### Requirements
-- [Zig](https://github.com/ziglang/zig) toolchain ([anyzig](https://github.com/marler8997/anyzig) is recommended)
-- [WASM-4](https://wasm4.org/docs/getting-started/setup)
-- [wasm-opt](https://www.npmjs.com/package/wasm-opt) (release builds only)
+To start a dev shell using [Nix](https://nixos.org), just type:
+```shell
+nix develop
+```
 
 Build and run a native (debug) executable:
 ```shell
@@ -30,14 +30,17 @@ zig build release -Doptimize=ReleaseSmall
 
 Load and run in your browser:
 ```shell
-w4 run zig-out/lib/opt.wasm
+w4 run ./zig-out/bin/cart_opt.wasm
 ```
 
 ## Distribution
+Bundle into an HTML file for publishing:
 ```shell
-cp zig-out/lib.opt.wasm game.wasm
+w4 bundle ./zig-out/bin/cart_opt.wasm --title "Escape Guldur" --html ./escape_guldur.html
+```
+
+To publish to wasmer.io, first update wapm.toml. Then remember your username and password and use `wapm`:
+```shell
 wapm login
 wapm publish
-
-w4 bundle game.wasm --title "Escape Guldur" --html escape_guldur.html
 ```

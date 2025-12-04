@@ -41,7 +41,13 @@ pub fn build(b: *std.Build) !void {
         .name = "cart",
         .root_source_file = b.path("src/main_wasm4.zig"),
         .optimize = optimize,
-        .target = b.resolveTargetQuery(.{ .cpu_arch = .wasm32, .os_tag = .freestanding }),
+        .target = b.resolveTargetQuery(.{
+            .cpu_arch = .wasm32,
+            .os_tag = .freestanding,
+            .cpu_features_add = std.Target.wasm.featureSet(&.{
+                .bulk_memory,
+            }),
+        }),
     });
     cart.root_module.export_symbol_names = &[_][]const u8{ "start", "update" };
     cart.entry = .disabled;
@@ -69,22 +75,25 @@ pub fn build(b: *std.Build) !void {
     step_run.dependOn(&run_native.step);
 
     { // Release build
-        const prefix = b.getInstallPath(.lib, "");
+        const install_step = b.addInstallArtifact(cart, .{});
+
         const cart_opt = b.addSystemCommand(&[_][]const u8{
             "wasm-opt",
+            "--no-validation", // TODO: Re-enable validation
             "-Oz",
             "--strip-debug",
             "--strip-producers",
             "--zero-filled-memory",
+            "--enable-bulk-memory",
         });
 
         cart_opt.addArtifactArg(cart);
-        const wasmopt_out = try std.fs.path.join(b.allocator, &.{ prefix, "cart_opt.wasm" });
-        defer b.allocator.free(wasmopt_out);
-        cart_opt.addArgs(&.{ "--output", wasmopt_out });
 
-        const release_build = b.step("release", "Run wasm-opt on cart.wasm, producing opt.wasm");
-        release_build.dependOn(&cart.step);
+        const output_path = b.getInstallPath(.bin, "cart_opt.wasm");
+        cart_opt.addArgs(&.{ "--output", output_path });
+        cart_opt.step.dependOn(&install_step.step);
+
+        const release_build = b.step("release", "Run wasm-opt on cart.wasm, producing cart_opt.wasm");
         release_build.dependOn(&cart_opt.step);
     }
 }
